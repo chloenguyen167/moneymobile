@@ -1,0 +1,4 @@
+// Copy to Signing.xcconfig và điền Team ID (hoặc chạy ./scripts/setup_ios_signing.sh)
+DEVELOPMENT_TEAM =
+PRODUCT_BUNDLE_IDENTIFIER = com.yourname.tuchi
+CODE_SIGN_STYLE = Automatic

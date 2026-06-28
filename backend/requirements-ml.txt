@@ -1,0 +1,3 @@
+# Optional ML dependencies for sentence-transformer embeddings
+# pip install -r requirements-ml.txt
+sentence-transformers==3.3.1
