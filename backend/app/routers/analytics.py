@@ -7,8 +7,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.deps import get_current_user
 from app.models import Alert, Budget, Category, User
-from app.schemas import AlertOut, AnalyticsSummary, BudgetCreate, BudgetOut, PipelineHealthOut, SubscriptionOut
+from app.schemas import (
+    AlertOut,
+    AnalyticsSummary,
+    BudgetCreate,
+    BudgetOut,
+    CashflowInsightsOut,
+    CashflowProfileIn,
+    CashflowProfileOut,
+    PipelineHealthOut,
+    SubscriptionOut,
+)
+from app.services.analytics.cashflow import get_cashflow_profile, upsert_cashflow_profile
 from app.services.analytics.forecast import compute_category_forecasts, get_stored_forecasts
+from app.services.analytics.recommendations import build_cashflow_insights
 from app.services.analytics.subscriptions import get_user_subscriptions
 from app.services.metrics.pipeline import get_pipeline_health
 from app.services.analytics.budget import get_analytics_summary, get_budget_status
@@ -133,3 +145,39 @@ async def list_categories(
         select(Category).where((Category.user_id.is_(None)) | (Category.user_id == user.id))
     )
     return [CategoryOut.model_validate(c) for c in result.scalars().all()]
+
+
+@router.post("/cashflow/profile", response_model=CashflowProfileOut)
+async def save_cashflow_profile(
+    body: CashflowProfileIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    profile = await upsert_cashflow_profile(db, user.id, body.starting_balance, body.monthly_income)
+    return CashflowProfileOut.model_validate(profile)
+
+
+@router.get("/cashflow/profile", response_model=CashflowProfileOut)
+async def read_cashflow_profile(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from fastapi import HTTPException
+
+    profile = await get_cashflow_profile(db, user.id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Cashflow profile not configured")
+    return CashflowProfileOut.model_validate(profile)
+
+
+@router.get("/analytics/cashflow-insights", response_model=CashflowInsightsOut)
+async def cashflow_insights(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from fastapi import HTTPException
+
+    profile = await get_cashflow_profile(db, user.id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Cashflow profile not configured")
+    return await build_cashflow_insights(db, user.id, profile)

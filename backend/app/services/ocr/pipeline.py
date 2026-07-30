@@ -11,11 +11,11 @@ from app.schemas import OcrResult
 from app.services.ocr.fast_track import _has_local_ocr_engine, run_fast_track
 from app.services.ocr.reference_correction import fuzzy_match_merchant
 from app.services.ocr.smart_track import run_smart_track
+from app.services.normalize import normalize_ocr_result
 
 
 def _vision_ocr_available() -> bool:
     return bool(settings.vintern_api_url or settings.gemini_api_key or settings.openai_api_key)
-
 
 async def process_receipt(
     db: AsyncSession,
@@ -49,7 +49,10 @@ async def process_receipt(
     else:
         result = await run_smart_track(image_bytes, None, end_to_end=True)
 
-    # Step 5: Post-OCR reference correction
+    # Step 5: Normalize OCR items before downstream classification/storage
+    result = normalize_ocr_result(result)
+
+    # Step 6: Post-OCR reference correction
     result = await _apply_reference_correction(db, user_id, result)
 
     from app.services.metrics.pipeline import record_ocr_track

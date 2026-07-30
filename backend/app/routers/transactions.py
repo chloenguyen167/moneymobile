@@ -11,6 +11,7 @@ from app.models import Transaction, User
 from app.schemas import (
     ClassificationResult,
     OcrResult,
+    ProcessPaymentScreenshotResponse,
     ProcessReceiptResponse,
     TransactionCreate,
     TransactionOut,
@@ -19,8 +20,13 @@ from app.schemas import (
 from app.services.analytics import check_budget_alerts
 from app.services.classify.pipeline import classify_transaction
 from app.services.ocr.pipeline import process_receipt
+from app.services.payment_screenshot.pipeline import (
+    payment_extract_to_ocr_result,
+    process_payment_screenshot,
+)
 from app.services.transactions import (
     add_merchant_reference,
+    create_transaction_from_payment_screenshot,
     create_transaction_from_ocr,
     save_transaction,
     to_transaction_out,
@@ -51,6 +57,42 @@ async def process_receipt_endpoint(
     return ProcessReceiptResponse(ocr=ocr, classification=classification, transaction_id=tx_id)
 
 
+@router.post("/process-payment-screenshot", response_model=ProcessPaymentScreenshotResponse)
+async def process_payment_screenshot_endpoint(
+    file: UploadFile = File(...),
+    raw_text_hint: str | None = Form(None),
+    auto_save: bool = Form(False),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    image_bytes = await file.read()
+    extraction = await process_payment_screenshot(image_bytes, raw_text_hint)
+    pseudo_ocr: OcrResult = payment_extract_to_ocr_result(extraction)
+    classification: ClassificationResult = await classify_transaction(
+        db,
+        user.id,
+        pseudo_ocr,
+        amount=extraction.total_amount,
+        transaction_date=extraction.transaction_date,
+    )
+
+    tx_id = None
+    if auto_save and extraction.total_amount:
+        tx = await create_transaction_from_payment_screenshot(
+            db,
+            user.id,
+            extraction,
+            classification,
+        )
+        tx_id = tx.id
+
+    return ProcessPaymentScreenshotResponse(
+        extraction=extraction,
+        classification=classification,
+        transaction_id=tx_id,
+    )
+
+
 @router.post("", response_model=TransactionOut)
 async def create_transaction(
     body: TransactionCreate,
@@ -72,7 +114,7 @@ async def list_transactions(
     result = await db.execute(
         select(Transaction)
         .where(Transaction.user_id == user.id)
-        .order_by(Transaction.transaction_date.desc(), Transaction.id.desc())
+        .order_by(Transaction.created_at.desc(), Transaction.id.desc())
         .limit(limit)
         .offset(offset)
     )

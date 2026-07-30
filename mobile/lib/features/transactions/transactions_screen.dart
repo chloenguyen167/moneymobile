@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/providers/providers.dart';
@@ -72,68 +73,77 @@ class _TransactionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFmt = DateFormat('dd/MM/yyyy');
+    final uploadedAtFmt = DateFormat('dd/MM/yyyy HH:mm');
     final needsConfirm = transaction.categoryName == null;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    transaction.merchantName ?? 'Không rõ merchant',
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => context.push('/transactions/${transaction.id}', extra: transaction),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      transaction.merchantName ?? 'Không rõ merchant',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                    ),
                   ),
-                ),
-                Text(
-                  formatVnd(transaction.amount),
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.secondary,
+                  Text(
+                    formatVnd(transaction.amount),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.secondary,
+                    ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Gửi lúc ${uploadedAtFmt.format(transaction.createdAt)} · ${transaction.source}',
+                style: const TextStyle(color: AppColors.onSurfaceMuted, fontSize: 13),
+              ),
+              if (transaction.categoryName != null) ...[
+                const SizedBox(height: 8),
+                Chip(
+                  label: Text(transaction.categoryName!),
+                  visualDensity: VisualDensity.compact,
                 ),
               ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${dateFmt.format(transaction.transactionDate)} · ${transaction.source}',
-              style: const TextStyle(color: AppColors.onSurfaceMuted, fontSize: 13),
-            ),
-            if (transaction.categoryName != null) ...[
+              if (transaction.classificationReason != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  transaction.classificationReason!,
+                  style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceMuted, fontStyle: FontStyle.italic),
+                ),
+              ],
               const SizedBox(height: 8),
-              Chip(
-                label: Text(transaction.categoryName!),
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
-            if (transaction.classificationReason != null) ...[
-              const SizedBox(height: 4),
               Text(
-                transaction.classificationReason!,
-                style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceMuted, fontStyle: FontStyle.italic),
+                'Chạm để xem chi tiết OCR',
+                style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceMuted),
               ),
+              if (needsConfirm && categories.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text('Chọn category để xác nhận:', style: Theme.of(context).textTheme.labelMedium),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: categories.map((cat) {
+                    return ActionChip(
+                      label: Text(cat.name),
+                      onPressed: () => onConfirm(cat.id),
+                    );
+                  }).toList(),
+                ),
+              ],
             ],
-            if (needsConfirm && categories.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text('Vuốt/chọn category để xác nhận:', style: Theme.of(context).textTheme.labelMedium),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: categories.map((cat) {
-                  return ActionChip(
-                    label: Text(cat.name),
-                    onPressed: () => onConfirm(cat.id),
-                  );
-                }).toList(),
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );

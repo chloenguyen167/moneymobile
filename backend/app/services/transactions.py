@@ -4,7 +4,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Category, Merchant, MerchantReference, Transaction, TransactionSource
-from app.schemas import ClassificationResult, OcrResult, TransactionCreate, TransactionOut
+from app.schemas import (
+    ClassificationResult,
+    OcrResult,
+    PaymentScreenshotExtract,
+    TransactionCreate,
+    TransactionOut,
+)
 from app.services.classify.pipeline import store_embedding
 from app.services.ocr.reference_correction import normalize_vietnamese
 
@@ -76,6 +82,34 @@ async def create_transaction_from_ocr(
         ocr_track_used=ocr.ocr_track_used,
         confidence=classification.confidence,
         classification_reason=classification.reason,
+    )
+    return await save_transaction(db, user_id, body)
+
+
+async def create_transaction_from_payment_screenshot(
+    db: AsyncSession,
+    user_id: int,
+    extract: PaymentScreenshotExtract,
+    classification: ClassificationResult,
+) -> Transaction:
+    reason_parts = [classification.reason] if classification.reason else []
+    if extract.payment_source:
+        reason_parts.append(f"Nguồn ảnh: {extract.payment_source}")
+    if extract.description:
+        reason_parts.append(f"Nội dung: {extract.description}")
+    if extract.reference_code:
+        reason_parts.append(f"Mã GD: {extract.reference_code}")
+
+    body = TransactionCreate(
+        merchant_name=extract.merchant or extract.payment_source,
+        amount=extract.total_amount or 0,
+        items=None,
+        category_id=classification.category_id,
+        source="ocr",
+        transaction_date=extract.transaction_date,
+        ocr_track_used=extract.ocr_track_used,
+        confidence=classification.confidence,
+        classification_reason=" | ".join(reason_parts) if reason_parts else None,
     )
     return await save_transaction(db, user_id, body)
 

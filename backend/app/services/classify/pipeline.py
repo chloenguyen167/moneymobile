@@ -9,13 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import Category, PersonalMerchantEmbedding, TransactionEmbedding
-from app.schemas import ClassificationResult, OcrResult
+from app.schemas import CategoryBreakdown, ClassificationResult, OcrResult, ReceiptItem
 from app.services.classify.embedding import build_feature_vector
 from app.services.ocr.reference_correction import normalize_vietnamese
 
 DEFAULT_CATEGORIES = [
     ("Ăn uống", "restaurant"),
     ("Mua sắm", "shopping_bag"),
+    ("Chăm sóc cá nhân", "self_improvement"),
     ("Di chuyển", "directions_car"),
     ("Giải trí", "movie"),
     ("Hóa đơn & Tiện ích", "receipt"),
@@ -27,9 +28,10 @@ DEFAULT_CATEGORIES = [
 
 async def seed_default_categories(db: AsyncSession) -> None:
     result = await db.execute(select(Category).where(Category.user_id.is_(None)))
-    if result.scalars().first():
-        return
+    existing = {category.name for category in result.scalars().all()}
     for name, icon in DEFAULT_CATEGORIES:
+        if name in existing:
+            continue
         db.add(Category(name=name, icon=icon, is_user_defined=False, user_id=None))
     await db.flush()
 
@@ -48,6 +50,12 @@ async def classify_transaction(
         return result
 
     await seed_default_categories(db)
+
+    if ocr.items:
+        ocr.items = await classify_receipt_items(db, user_id, ocr)
+        item_result = await _aggregate_item_categories(db, ocr.items)
+        if item_result:
+            return await _finish(item_result)
 
     amount = amount or ocr.total_amount or 0
     tx_date = transaction_date or ocr.transaction_date or date.today()
@@ -162,6 +170,55 @@ MERCHANT_RULES: list[tuple[list[str], str]] = [
     (["pharmacy", "nhathuoc", "benh vien", "pkdk"], "Sức khỏe"),
 ]
 
+ITEM_RULES: dict[str, list[str]] = {
+    "Ăn uống": [
+        "tao", "le", "cam", "quyt", "chuoi", "nho", "xoai", "dua hau", "trai cay",
+        "rau", "cu", "qua", "cai", "cai thia", "cai be", "cai ngot", "xalach", "rau muong",
+        "thit", "thit heo", "thit bo", "thit ga", "heo xay", "ga xay", "ca", "tom", "muc", "hai san",
+        "trung", "gao", "gao te", "mi", "mi goi", "mi tom", "mi an lien", "hao hao", "omachi", "reeva",
+        "pho", "bun", "hu tieu", "banh mi", "banh", "com",
+        "sua", "sua tuoi", "sua chua", "sua bot", "sua bau", "pho mai", "bot ngot", "nuoc mam", "dau an", "gia vi",
+        "nuoc", "pepsi", "coca", "coffee", "cafe", "tra", "tra sua", "sinh to",
+        "vissan", "cp", "meatdeli", "vinamilk", "milac",
+    ],
+    "Mua sắm": [
+        "nuoc rua chen", "nuoc giat", "giay ve sinh", "ta bim", "moc ao", "hop dung do", "do gia dung",
+        "quan ao", "tui rac", "nuoc lau san", "bot giat", "nuoc xa vai", "downy",
+    ],
+    "Chăm sóc cá nhân": [
+        "dau goi", "sua tam", "xa phong", "ban chai", "kem danh rang", "chi nha khoa",
+        "my pham", "son", "kem duong", "tam bong", "rua mat", "tay trang", "lan khu mui",
+        "dau xa", "sua rua mat", "bong tay trang", "khan uot", "chong nang", "kem chong nang", "dau nang",
+    ],
+    "Di chuyển": ["xang", "ve xe", "phi gui xe", "grab", "taxi", "tram thu phi"],
+    "Giải trí": ["ve phim", "bap rang", "netflix", "spotify", "game", "karaoke"],
+    "Hóa đơn & Tiện ích": ["tien dien", "tien nuoc", "wifi", "internet", "cuoc dt", "gas"],
+    "Sức khỏe": ["thuoc", "vitamin", "khau trang", "nhiet ke", "dau gio", "thuoc boi"],
+    "Giáo dục": ["sach", "but", "vo", "hoc phi", "tap", "balo"],
+}
+
+
+def _tokenize_normalized(text: str) -> set[str]:
+    return {token for token in text.split() if token}
+
+
+def _score_item_category(text_blob: str, tokens: set[str], keywords: list[str]) -> tuple[int, list[str]]:
+    score = 0
+    matched: list[str] = []
+    for keyword in keywords:
+        keyword_norm = normalize_vietnamese(keyword)
+        if not keyword_norm:
+            continue
+        if " " in keyword_norm:
+            if keyword_norm in text_blob:
+                score += 3
+                matched.append(keyword)
+            continue
+        if keyword_norm in tokens:
+            score += 2
+            matched.append(keyword)
+    return score, matched
+
 
 async def _smart_classify(db: AsyncSession, user_id: int, ocr: OcrResult, amount: float) -> ClassificationResult:
     from app.services.classify.taxonomy import llm_classify_with_taxonomy
@@ -193,6 +250,131 @@ async def _smart_classify(db: AsyncSession, user_id: int, ocr: OcrResult, amount
         track_used="smart",
         reason="Phân loại tự động dựa trên merchant/món hàng",
         needs_confirmation=True,
+    )
+
+
+async def classify_receipt_items(db: AsyncSession, user_id: int, ocr: OcrResult) -> list[ReceiptItem]:
+    from app.services.classify.taxonomy import llm_classify_receipt_items
+
+    await seed_default_categories(db)
+    categories_result = await db.execute(select(Category).where(Category.user_id.is_(None)))
+    categories = {c.name: c for c in categories_result.scalars().all()}
+    classified: list[ReceiptItem] = []
+
+    merchant_norm = normalize_vietnamese(ocr.merchant or "")
+    for item in ocr.items:
+        item_text = item.canonical_name or item.normalized_name or normalize_vietnamese(item.name)
+        brand_norm = normalize_vietnamese(item.brand or "")
+        text_blob = " ".join(part for part in [merchant_norm, item_text, brand_norm] if part).strip()
+        tokens = _tokenize_normalized(text_blob)
+
+        matched_name = "Khác"
+        confidence = 0.55
+        reason = "Không đủ tín hiệu rõ, gán nhóm Khác"
+        best_score = 0
+        best_matches: list[str] = []
+
+        for category_name, keywords in ITEM_RULES.items():
+            score, matches = _score_item_category(text_blob, tokens, keywords)
+            if score > best_score:
+                matched_name = category_name
+                best_score = score
+                best_matches = matches
+
+        if best_score > 0:
+            confidence = min(0.92, 0.62 + best_score * 0.08)
+            reason = f"Khớp từ khóa: {', '.join(best_matches[:3])}"
+
+        category = categories.get(matched_name)
+        classified.append(
+            ReceiptItem(
+                name=item.name,
+                price=item.price,
+                qty=item.qty,
+                raw_name=item.raw_name,
+                normalized_name=item.normalized_name,
+                canonical_name=item.canonical_name,
+                brand=item.brand,
+                size_value=item.size_value,
+                size_unit=item.size_unit,
+                removed_tokens=item.removed_tokens,
+                category_id=category.id if category else None,
+                category_name=matched_name if category else None,
+                classification_confidence=confidence,
+                classification_reason=reason,
+            )
+        )
+
+    llm_candidates = [
+        (index, item)
+        for index, item in enumerate(classified)
+        if (item.category_name == "Khác" or (item.classification_confidence or 0.0) < settings.classify_item_llm_confidence_threshold)
+    ]
+    if llm_candidates and (settings.openai_api_key or settings.gemini_api_key):
+        batch_size = max(1, settings.classify_item_llm_max_items)
+        for start in range(0, len(llm_candidates), batch_size):
+            batch = llm_candidates[start : start + batch_size]
+            llm_result = await llm_classify_receipt_items(
+                db,
+                user_id,
+                ocr.merchant,
+                [item for _, item in batch],
+            )
+            for local_index, (item_index, item) in enumerate(batch):
+                payload = llm_result.get(local_index)
+                if not payload:
+                    continue
+                category = categories.get(payload["category"])
+                if not category:
+                    continue
+                classified[item_index] = item.model_copy(
+                    update={
+                        "category_id": category.id,
+                        "category_name": category.name,
+                        "classification_confidence": max(item.classification_confidence or 0.0, payload["confidence"]),
+                        "classification_reason": payload["reason"],
+                    }
+                )
+
+    return classified
+
+
+async def _aggregate_item_categories(db: AsyncSession, items: list[ReceiptItem]) -> ClassificationResult | None:
+    weighted: Counter[int] = Counter()
+    names: dict[int, str] = {}
+    item_counts: Counter[int] = Counter()
+
+    for item in items:
+        if item.category_id is None or item.category_name is None:
+            continue
+        weight = max(item.price, 1.0) * max(item.qty, 1)
+        weighted[item.category_id] += weight
+        names[item.category_id] = item.category_name
+        item_counts[item.category_id] += max(item.qty, 1)
+
+    if not weighted:
+        return None
+
+    breakdown = [
+        CategoryBreakdown(
+            category_id=category_id,
+            category_name=names[category_id],
+            total_amount=round(total_amount, 2),
+            item_count=item_counts[category_id],
+        )
+        for category_id, total_amount in weighted.most_common()
+    ]
+    best_cat_id, best_weight = weighted.most_common(1)[0]
+    total = sum(weighted.values())
+    confidence = min(0.95, max(0.6, best_weight / total))
+    return ClassificationResult(
+        category_id=best_cat_id,
+        category_name=names[best_cat_id],
+        confidence=round(confidence, 3),
+        track_used="item_aggregate",
+        reason=f"Suy ra từ phân loại {len(items)} sản phẩm",
+        needs_confirmation=True,
+        category_breakdown=breakdown,
     )
 
 

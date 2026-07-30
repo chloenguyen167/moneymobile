@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     classify_knn_threshold: float = 0.85
     classify_knn_top_k: int = 5
     classify_knn_min_similarity: float = 0.6
+    classify_item_llm_confidence_threshold: float = 0.7
+    classify_item_llm_max_items: int = 50
 
     use_sentence_embeddings: bool = False
     embedding_model_name: str = "paraphrase-multilingual-mpnet-base-v2"
@@ -34,7 +36,7 @@ class Settings(BaseSettings):
     vintern_timeout_seconds: int = 90
 
     # Phase 3: Gemini
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-2.5-flash"
 
     # Phase 3: Gmail OAuth (iOS email parsing)
     gmail_client_id: str = ""

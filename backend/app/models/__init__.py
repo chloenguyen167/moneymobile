@@ -41,6 +41,10 @@ class User(Base):
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="user")
     categories: Mapped[list["Category"]] = relationship(back_populates="user")
     budgets: Mapped[list["Budget"]] = relationship(back_populates="user")
+    cashflow_profile: Mapped[Optional["UserCashflowProfile"]] = relationship(
+        back_populates="user",
+        uselist=False,
+    )
 
 
 class Category(Base):
@@ -264,6 +268,21 @@ class CommunityMerchantSignal(Base):
     )
 
 
+class UserCashflowProfile(Base):
+    __tablename__ = "user_cashflow_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
+    starting_balance: Mapped[float] = mapped_column(Float)
+    monthly_income: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    currency: Mapped[str] = mapped_column(String(10), default="VND")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped["User"] = relationship(back_populates="cashflow_profile")
+
+
 class PipelineMetricDaily(Base):
     __tablename__ = "pipeline_metrics_daily"
 
@@ -281,4 +300,3 @@ class PipelineMetricDaily(Base):
     cls_global_graph: Mapped[int] = mapped_column(Integer, default=0)
     cls_llm: Mapped[int] = mapped_column(Integer, default=0)
     cls_smart: Mapped[int] = mapped_column(Integer, default=0)
-

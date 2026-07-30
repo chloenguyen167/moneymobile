@@ -61,6 +61,8 @@ Flutter (Riverpod)  →  FastAPI  →  PostgreSQL + pgvector
 | `GET /api/v1/categories` | Danh sách category |
 | `GET /api/v1/analytics/summary` | Tổng hợp chi tiêu |
 | `GET/POST /api/v1/budgets` | Quản lý ngân sách |
+| `GET/POST /api/v1/cashflow/profile` | Đọc/lưu số dư đầu tháng và thu nhập tháng |
+| `GET /api/v1/analytics/cashflow-insights` | Dự báo cashflow + gợi ý cắt giảm |
 
 ---
 
@@ -243,6 +245,113 @@ Services: `postgres` (pgvector) · `redis` · `api` (port 8000) · `worker` · `
 curl http://localhost:8000/health
 # OpenAPI docs
 open http://localhost:8000/docs
+```
+
+### Migration cashflow profile
+
+Project này hiện chưa dùng Alembic. Phần lớn bảng mới sẽ được tạo khi API khởi động qua `Base.metadata.create_all()`.
+
+Với database đang chạy sẵn, có thể chủ động chạy migration SQL cho `user_cashflow_profiles`:
+
+```bash
+cd /Users/mac/moneymobile
+docker compose exec -T postgres psql -U postgres -d tuchi \
+  < backend/scripts/migrations/20260729_add_user_cashflow_profiles.sql
+```
+
+Nếu lệnh trên không tiện trong container, có thể copy nội dung file này và chạy trực tiếp trong PostgreSQL:
+
+[`backend/scripts/migrations/20260729_add_user_cashflow_profiles.sql`](/Users/mac/moneymobile/backend/scripts/migrations/20260729_add_user_cashflow_profiles.sql)
+
+### Test API cashflow
+
+1. Đăng nhập để lấy JWT:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "email": "demo@tuchi.app",
+    "password": "123456"
+  }'
+```
+
+2. Lưu cashflow profile:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/cashflow/profile \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "starting_balance": 5000000,
+    "monthly_income": 12000000
+  }'
+```
+
+Response mẫu:
+
+```json
+{
+  "starting_balance": 5000000,
+  "monthly_income": 12000000,
+  "currency": "VND",
+  "updated_at": "2026-07-29T10:00:00+00:00"
+}
+```
+
+3. Đọc cashflow profile:
+
+```bash
+curl http://localhost:8000/api/v1/cashflow/profile \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+4. Lấy forecast + driver + recommendation:
+
+```bash
+curl http://localhost:8000/api/v1/analytics/cashflow-insights \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+Response mẫu:
+
+```json
+{
+  "forecast": {
+    "month": "2026-07",
+    "starting_balance": 5000000,
+    "monthly_income": 12000000,
+    "spent_so_far": 3200000,
+    "remaining_balance": 1800000,
+    "days_elapsed": 29,
+    "days_remaining": 2,
+    "daily_burn_rate": 110345,
+    "forecast_end_of_month_spend": 3420690,
+    "projected_end_balance": 13579310,
+    "depletion_date": "2026-08-14",
+    "can_predict_depletion_date": true
+  },
+  "drivers": [
+    {
+      "category_name": "Ăn uống",
+      "spent_so_far": 1800000,
+      "forecast_end_of_month": 1924138,
+      "safe_amount": 1200000,
+      "excess_amount": 724138,
+      "pace_ratio": 1.6
+    }
+  ],
+  "recommendations": [
+    {
+      "category_name": "Ăn uống",
+      "suggested_cut_amount": 724138,
+      "suggested_cut_count": 4,
+      "basis": "median_ticket",
+      "message": "Ăn uống đang vượt nhịp an toàn. Nên giảm khoảng 724.138đ, tương đương khoảng 4 lần chi tiêu trong nhóm này.",
+      "priority": "high"
+    }
+  ]
+}
 ```
 
 ### Chạy backend local (không Docker)

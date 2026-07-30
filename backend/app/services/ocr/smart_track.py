@@ -17,7 +17,6 @@ SMART_PROMPT = """Extract receipt data from this Vietnamese receipt image/text.
 Return JSON only with keys: merchant, items (array of {name, price, qty}), total_amount (number), transaction_date (YYYY-MM-DD), confidence (0-1).
 If text hint is provided, use it to correct OCR errors especially Vietnamese diacritics."""
 
-
 def _image_mime(image_bytes: bytes) -> str:
     if image_bytes[:8] == b"\x89PNG\r\n\x1a\n":
         return "image/png"
@@ -26,7 +25,6 @@ def _image_mime(image_bytes: bytes) -> str:
     if image_bytes[:4] == b"RIFF" and image_bytes[8:12] == b"WEBP":
         return "image/webp"
     return "image/jpeg"
-
 
 async def run_smart_track(
     image_bytes: bytes,
@@ -117,7 +115,17 @@ async def _openai_extract(image_bytes: bytes, raw_text: str | None, end_to_end: 
 
 
 def _json_to_ocr_result(data: dict, track: str) -> OcrResult:
-    items = [ReceiptItem(**i) for i in data.get("items", []) if "name" in i and "price" in i]
+    items: list[ReceiptItem] = []
+    for i in data.get("items", []):
+        if "name" not in i or "price" not in i:
+            continue
+        try:
+            qty_raw = i.get("qty", 1)
+            qty = max(1, int(round(float(qty_raw))))
+            price = float(i["price"])
+            items.append(ReceiptItem(name=str(i["name"]).strip(), price=price, qty=qty))
+        except (TypeError, ValueError):
+            continue
     tx_date = None
     if data.get("transaction_date"):
         try:

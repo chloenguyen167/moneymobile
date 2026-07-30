@@ -6,7 +6,8 @@ from rapidfuzz import fuzz
 
 
 def normalize_vietnamese(text: str) -> str:
-    text = unicodedata.normalize("NFD", text.lower())
+    text = text.lower().replace("đ", "d")
+    text = unicodedata.normalize("NFD", text)
     text = "".join(c for c in text if unicodedata.category(c) != "Mn")
     return re.sub(r"[^a-z0-9\s]", "", text).strip()
 

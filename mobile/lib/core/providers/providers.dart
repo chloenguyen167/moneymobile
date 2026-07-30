@@ -10,15 +10,21 @@ import '../../data/remote/tuchi_repository.dart';
 
 final secureStorageProvider = Provider((_) => const FlutterSecureStorage());
 
-final apiClientProvider = Provider((ref) => ApiClient(ref.watch(secureStorageProvider)));
+final apiClientProvider = Provider(
+  (ref) => ApiClient(ref.watch(secureStorageProvider)),
+);
 
-final repositoryProvider = Provider((ref) => TuchiRepository(ref.watch(apiClientProvider)));
+final repositoryProvider = Provider(
+  (ref) => TuchiRepository(ref.watch(apiClientProvider)),
+);
 
 final authTokenProvider = FutureProvider<String?>((ref) async {
   return ref.watch(apiClientProvider).token;
 });
 
-final transactionsProvider = FutureProvider<List<TransactionModel>>((ref) async {
+final transactionsProvider = FutureProvider<List<TransactionModel>>((
+  ref,
+) async {
   return ref.watch(repositoryProvider).getTransactions();
 });
 
@@ -34,11 +40,25 @@ final analyticsProvider = FutureProvider<AnalyticsSummaryModel>((ref) async {
   return ref.watch(repositoryProvider).getAnalytics();
 });
 
+final cashflowProfileProvider = FutureProvider<CashflowProfileModel?>((
+  ref,
+) async {
+  return ref.watch(repositoryProvider).getCashflowProfile();
+});
+
+final cashflowInsightsProvider = FutureProvider<CashflowInsightsModel>((
+  ref,
+) async {
+  return ref.watch(repositoryProvider).getCashflowInsights();
+});
+
 final alertsProvider = FutureProvider<List<AlertModel>>((ref) async {
   return ref.watch(repositoryProvider).getAlerts();
 });
 
-final subscriptionsProvider = FutureProvider<List<SubscriptionModel>>((ref) async {
+final subscriptionsProvider = FutureProvider<List<SubscriptionModel>>((
+  ref,
+) async {
   return ref.watch(repositoryProvider).getSubscriptions();
 });
 
@@ -46,23 +66,35 @@ final pipelineHealthProvider = FutureProvider<PipelineHealthModel>((ref) async {
   return ref.watch(repositoryProvider).getPipelineHealth();
 });
 
-final notificationTemplatesProvider = FutureProvider<List<NotificationTemplateModel>>((ref) async {
-  return ref.watch(repositoryProvider).getNotificationTemplates();
-});
+final notificationTemplatesProvider =
+    FutureProvider<List<NotificationTemplateModel>>((ref) async {
+      return ref.watch(repositoryProvider).getNotificationTemplates();
+    });
 
 /// Edge Gate IQA — Laplacian variance blur detection (MVP).
 class ImageQualityResult {
-  ImageQualityResult({required this.isLowQuality, required this.blurScore, required this.message});
+  ImageQualityResult({
+    required this.isLowQuality,
+    required this.blurScore,
+    required this.message,
+  });
 
   final bool isLowQuality;
   final double blurScore;
   final String message;
 }
 
-ImageQualityResult evaluateImageQuality(Uint8List bytes, {double blurThreshold = 100}) {
+ImageQualityResult evaluateImageQuality(
+  Uint8List bytes, {
+  double blurThreshold = 100,
+}) {
   final decoded = img.decodeImage(bytes);
   if (decoded == null) {
-    return ImageQualityResult(isLowQuality: true, blurScore: 0, message: 'Không đọc được ảnh');
+    return ImageQualityResult(
+      isLowQuality: true,
+      blurScore: 0,
+      message: 'Không đọc được ảnh',
+    );
   }
 
   final gray = img.grayscale(decoded);
@@ -74,12 +106,13 @@ ImageQualityResult evaluateImageQuality(Uint8List bytes, {double blurThreshold =
   for (var y = 1; y < h - 1; y++) {
     for (var x = 1; x < w - 1; x++) {
       final c = resized.getPixel(x, y).r;
-      final lap = (-4 * c +
-              resized.getPixel(x - 1, y).r +
-              resized.getPixel(x + 1, y).r +
-              resized.getPixel(x, y - 1).r +
-              resized.getPixel(x, y + 1).r)
-          .toDouble();
+      final lap =
+          (-4 * c +
+                  resized.getPixel(x - 1, y).r +
+                  resized.getPixel(x + 1, y).r +
+                  resized.getPixel(x, y - 1).r +
+                  resized.getPixel(x, y + 1).r)
+              .toDouble();
       variance += lap * lap;
     }
   }

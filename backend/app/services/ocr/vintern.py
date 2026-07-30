@@ -114,7 +114,8 @@ def _to_ocr_result(data: dict) -> OcrResult:
     items = []
     for i in data.get("items", []):
         try:
-            items.append(ReceiptItem(name=i["name"], price=float(i["price"]), qty=int(i.get("qty", 1))))
+            qty = max(1, int(round(float(i.get("qty", 1)))))
+            items.append(ReceiptItem(name=i["name"], price=float(i["price"]), qty=qty))
         except (KeyError, TypeError, ValueError):
             continue
 

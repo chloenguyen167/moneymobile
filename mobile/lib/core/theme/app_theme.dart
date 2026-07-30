@@ -41,20 +41,24 @@ class AppTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.primary.withValues(alpha: 0.35),
+        height: 76,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        indicatorColor: const Color(0xFFFFE9A3),
+        surfaceTintColor: Colors.transparent,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return TextStyle(
             fontSize: 12,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             color: selected ? AppColors.secondary : AppColors.onSurfaceMuted,
+            letterSpacing: selected ? 0.1 : 0,
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
             color: selected ? AppColors.secondary : AppColors.onSurfaceMuted,
-            size: 24,
+            size: selected ? 25 : 23,
           );
         }),
       ),
@@ -64,7 +68,9 @@ class AppTheme {
           foregroundColor: AppColors.onPrimary,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
         ),
       ),
@@ -75,7 +81,9 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.secondary,
           side: const BorderSide(color: AppColors.secondary),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -103,8 +111,13 @@ class AppTheme {
           side: const BorderSide(color: AppColors.border),
         ),
       ),
-      dividerTheme: const DividerThemeData(color: AppColors.border, thickness: 1),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(color: AppColors.secondary),
+      dividerTheme: const DividerThemeData(
+        color: AppColors.border,
+        thickness: 1,
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: AppColors.secondary,
+      ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.primary,
         foregroundColor: AppColors.onPrimary,

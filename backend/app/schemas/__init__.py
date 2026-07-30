@@ -43,6 +43,17 @@ class ReceiptItem(BaseModel):
     name: str
     price: float
     qty: int = 1
+    raw_name: Optional[str] = None
+    normalized_name: Optional[str] = None
+    canonical_name: Optional[str] = None
+    brand: Optional[str] = None
+    size_value: Optional[float] = None
+    size_unit: Optional[str] = None
+    removed_tokens: Optional[list[str]] = None
+    category_id: Optional[int] = None
+    category_name: Optional[str] = None
+    classification_confidence: Optional[float] = None
+    classification_reason: Optional[str] = None
 
 
 class OcrResult(BaseModel):
@@ -62,6 +73,14 @@ class ClassificationResult(BaseModel):
     track_used: str = "fast"
     reason: Optional[str] = None
     needs_confirmation: bool = True
+    category_breakdown: list["CategoryBreakdown"] = []
+
+
+class CategoryBreakdown(BaseModel):
+    category_id: Optional[int] = None
+    category_name: str
+    total_amount: float
+    item_count: int
 
 
 class TransactionCreate(BaseModel):
@@ -180,6 +199,24 @@ class ProcessReceiptResponse(BaseModel):
     transaction_id: Optional[int] = None
 
 
+class PaymentScreenshotExtract(BaseModel):
+    merchant: Optional[str] = None
+    total_amount: Optional[float] = None
+    transaction_date: Optional[date] = None
+    payment_source: Optional[str] = None
+    description: Optional[str] = None
+    reference_code: Optional[str] = None
+    ocr_track_used: str = "payment_smart"
+    ocr_confidence: float = 0.0
+    raw_text: Optional[str] = None
+
+
+class ProcessPaymentScreenshotResponse(BaseModel):
+    extraction: PaymentScreenshotExtract
+    classification: ClassificationResult
+    transaction_id: Optional[int] = None
+
+
 class SubscriptionOut(BaseModel):
     id: int
     merchant_name: str
@@ -204,3 +241,56 @@ class PipelineHealthOut(BaseModel):
     recommendations: list[str]
     daily_breakdown: list[dict]
     current_thresholds: dict
+
+
+class CashflowProfileIn(BaseModel):
+    starting_balance: float
+    monthly_income: Optional[float] = None
+
+
+class CashflowProfileOut(BaseModel):
+    starting_balance: float
+    monthly_income: Optional[float] = None
+    currency: str = "VND"
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class CashflowForecastOut(BaseModel):
+    month: str
+    starting_balance: float
+    monthly_income: Optional[float] = None
+    spent_so_far: float
+    remaining_balance: float
+    days_elapsed: int
+    days_remaining: int
+    daily_burn_rate: float
+    forecast_end_of_month_spend: float
+    projected_end_balance: float
+    depletion_date: Optional[str] = None
+    can_predict_depletion_date: bool = False
+
+
+class CashflowDriverOut(BaseModel):
+    category_name: str
+    spent_so_far: float
+    forecast_end_of_month: float
+    safe_amount: float
+    excess_amount: float
+    pace_ratio: float
+
+
+class CashflowRecommendationOut(BaseModel):
+    category_name: str
+    suggested_cut_amount: float
+    suggested_cut_count: Optional[int] = None
+    basis: str
+    message: str
+    priority: str
+
+
+class CashflowInsightsOut(BaseModel):
+    forecast: CashflowForecastOut
+    drivers: list[CashflowDriverOut]
+    recommendations: list[CashflowRecommendationOut]

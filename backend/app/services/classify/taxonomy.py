@@ -2,6 +2,7 @@
 
 import json
 import logging
+from collections.abc import Iterable
 
 import httpx
 import numpy as np
@@ -10,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import Category
-from app.schemas import ClassificationResult, OcrResult
+from app.schemas import ClassificationResult, OcrResult, ReceiptItem
 from app.services.classify.embedding import build_feature_text, build_feature_vector
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "Ăn uống": ["cơm", "phở", "cafe", "trà sữa", "nhà hàng", "food", "grab food", "highlands", "starbucks"],
     "Mua sắm": ["siêu thị", "winmart", "coopmart", "shopee", "lazada", "quần áo", "điện máy"],
+    "Chăm sóc cá nhân": ["mỹ phẩm", "dầu gội", "sữa tắm", "kem đánh răng", "sữa rửa mặt", "son", "chăm sóc da"],
     "Di chuyển": ["grab", "be", "xăng", "petrolimex", "vé xe", "taxi", "gửi xe"],
     "Giải trí": ["netflix", "spotify", "cgv", "game", "karaoke", "phim"],
     "Hóa đơn & Tiện ích": ["điện", "evn", "nước", "internet", "fpt", "viettel", "mobifone", "tiền nhà"],
@@ -26,7 +28,6 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "Giáo dục": ["học phí", "sách", "khóa học", "udemy", "coursera"],
     "Khác": ["khác", "misc", "other"],
 }
-
 
 async def get_user_taxonomy(db: AsyncSession, user_id: int) -> list[Category]:
     result = await db.execute(
@@ -128,6 +129,78 @@ Trả JSON:
         reason=data.get("reason", "LLM phân loại với taxonomy enrichment"),
         needs_confirmation=True,
     )
+
+
+async def llm_classify_receipt_items(
+    db: AsyncSession,
+    user_id: int,
+    merchant: str | None,
+    items: list[ReceiptItem],
+) -> dict[int, dict]:
+    if not items:
+        return {}
+
+    categories = await get_user_taxonomy(db, user_id)
+    if not categories:
+        return {}
+
+    category_names = [c.name for c in categories]
+    taxonomy_ctx = "\n".join(f"- {name}" for name in category_names)
+    item_lines = []
+    for index, item in enumerate(items):
+        item_lines.append(
+            f'{index}. name="{item.name}", canonical="{item.canonical_name or ""}", '
+            f'brand="{item.brand or ""}", price={item.price}, qty={item.qty}'
+        )
+
+    prompt = f"""Phân loại từng sản phẩm trong hóa đơn vào đúng category có sẵn.
+
+Taxonomy hiện tại:
+{taxonomy_ctx}
+
+Merchant: {merchant or "Unknown"}
+
+Danh sách item:
+{chr(10).join(item_lines)}
+
+Quy tắc:
+1. Chỉ được chọn category có sẵn trong taxonomy
+2. Ưu tiên nghĩa thực tế của sản phẩm, không ưu tiên merchant
+3. Nếu không chắc thì chọn "Khác"
+4. Trả JSON object với key là index item
+
+Trả JSON đúng dạng:
+{{
+  "0": {{"category": "Ăn uống", "confidence": 0.91, "reason": "..." }},
+  "1": {{"category": "Khác", "confidence": 0.45, "reason": "..." }}
+}}"""
+
+    data = await _call_llm(prompt)
+    if not isinstance(data, dict):
+        return {}
+
+    valid_names = set(category_names)
+    parsed: dict[int, dict] = {}
+    for raw_index, payload in data.items():
+        try:
+            index = int(raw_index)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        category_name = str(payload.get("category", "Khác"))
+        if category_name not in valid_names:
+            continue
+        try:
+            confidence = float(payload.get("confidence", 0.0))
+        except (TypeError, ValueError):
+            confidence = 0.0
+        parsed[index] = {
+            "category": category_name,
+            "confidence": max(0.0, min(confidence, 1.0)),
+            "reason": str(payload.get("reason", "LLM phân loại item")),
+        }
+    return parsed
 
 
 async def _call_llm(prompt: str) -> dict | None:

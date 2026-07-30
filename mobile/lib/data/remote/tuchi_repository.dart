@@ -8,22 +8,26 @@ class TuchiRepository {
 
   final ApiClient _api;
 
-  Future<void> register(String email, String password, {String? displayName}) async {
-    final resp = await _api.post('/auth/register', auth: false, body: {
-      'email': email,
-      'password': password,
-      if (displayName != null) 'display_name': displayName,
-    });
+  Future<void> register(
+    String email,
+    String password, {
+    String? displayName,
+  }) async {
+    final body = <String, dynamic>{'email': email, 'password': password};
+    if (displayName != null) body['display_name'] = displayName;
+
+    final resp = await _api.post('/auth/register', auth: false, body: body);
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     final data = jsonDecode(resp.body) as Map<String, dynamic>;
     await _api.saveToken(data['access_token'] as String);
   }
 
   Future<void> login(String email, String password) async {
-    final resp = await _api.post('/auth/login', auth: false, body: {
-      'email': email,
-      'password': password,
-    });
+    final resp = await _api.post(
+      '/auth/login',
+      auth: false,
+      body: {'email': email, 'password': password},
+    );
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     final data = jsonDecode(resp.body) as Map<String, dynamic>;
     await _api.saveToken(data['access_token'] as String);
@@ -35,7 +39,9 @@ class TuchiRepository {
     final resp = await _api.get('/transactions');
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     final list = jsonDecode(resp.body) as List;
-    return list.map((e) => TransactionModel.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => TransactionModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<ProcessReceiptResult> processReceipt(
@@ -51,13 +57,39 @@ class TuchiRepository {
     );
     final body = await resp.stream.bytesToString();
     if (resp.statusCode >= 400) throw Exception(body);
-    return ProcessReceiptResult.fromJson(jsonDecode(body) as Map<String, dynamic>);
+    return ProcessReceiptResult.fromJson(
+      jsonDecode(body) as Map<String, dynamic>,
+    );
   }
 
-  Future<TransactionModel> confirmCategory(int transactionId, int categoryId) async {
-    final resp = await _api.post('/transactions/$transactionId/confirm?category_id=$categoryId');
+  Future<ProcessPaymentScreenshotResult> processPaymentScreenshot(
+    List<int> bytes, {
+    required String filename,
+  }) async {
+    final resp = await _api.multipart(
+      '/transactions/process-payment-screenshot',
+      fileBytes: bytes,
+      filename: filename,
+      fields: {'auto_save': 'true'},
+    );
+    final body = await resp.stream.bytesToString();
+    if (resp.statusCode >= 400) throw Exception(body);
+    return ProcessPaymentScreenshotResult.fromJson(
+      jsonDecode(body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<TransactionModel> confirmCategory(
+    int transactionId,
+    int categoryId,
+  ) async {
+    final resp = await _api.post(
+      '/transactions/$transactionId/confirm?category_id=$categoryId',
+    );
     if (resp.statusCode >= 400) throw Exception(_error(resp));
-    return TransactionModel.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
+    return TransactionModel.fromJson(
+      jsonDecode(resp.body) as Map<String, dynamic>,
+    );
   }
 
   Future<TransactionModel> createTransaction({
@@ -66,35 +98,43 @@ class TuchiRepository {
     int? categoryId,
     String source = 'manual',
   }) async {
-    final resp = await _api.post('/transactions', body: {
-      'amount': amount,
-      if (merchantName != null) 'merchant_name': merchantName,
-      if (categoryId != null) 'category_id': categoryId,
-      'source': source,
-    });
+    final body = <String, dynamic>{'amount': amount, 'source': source};
+    if (merchantName != null) body['merchant_name'] = merchantName;
+    if (categoryId != null) body['category_id'] = categoryId;
+
+    final resp = await _api.post('/transactions', body: body);
     if (resp.statusCode >= 400) throw Exception(_error(resp));
-    return TransactionModel.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
+    return TransactionModel.fromJson(
+      jsonDecode(resp.body) as Map<String, dynamic>,
+    );
   }
 
   Future<List<CategoryModel>> getCategories() async {
     final resp = await _api.get('/categories');
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     final list = jsonDecode(resp.body) as List;
-    return list.map((e) => CategoryModel.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => CategoryModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<BudgetModel>> getBudgets() async {
     final resp = await _api.get('/budgets');
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     final list = jsonDecode(resp.body) as List;
-    return list.map((e) => BudgetModel.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => BudgetModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
-  Future<BudgetModel> createBudget({required int categoryId, required double limitAmount}) async {
-    final resp = await _api.post('/budgets', body: {
-      'category_id': categoryId,
-      'limit_amount': limitAmount,
-    });
+  Future<BudgetModel> createBudget({
+    required int categoryId,
+    required double limitAmount,
+  }) async {
+    final resp = await _api.post(
+      '/budgets',
+      body: {'category_id': categoryId, 'limit_amount': limitAmount},
+    );
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     return BudgetModel.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
   }
@@ -102,14 +142,54 @@ class TuchiRepository {
   Future<AnalyticsSummaryModel> getAnalytics() async {
     final resp = await _api.get('/analytics/summary');
     if (resp.statusCode >= 400) throw Exception(_error(resp));
-    return AnalyticsSummaryModel.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
+    return AnalyticsSummaryModel.fromJson(
+      jsonDecode(resp.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<CashflowProfileModel?> getCashflowProfile() async {
+    final resp = await _api.get('/cashflow/profile');
+    if (resp.statusCode == 404) return null;
+    if (resp.statusCode >= 400) throw Exception(_error(resp));
+    return CashflowProfileModel.fromJson(
+      jsonDecode(resp.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<CashflowProfileModel> saveCashflowProfile({
+    required double startingBalance,
+    double? monthlyIncome,
+  }) async {
+    final resp = await _api.post(
+      '/cashflow/profile',
+      body: {
+        'starting_balance': startingBalance,
+        'monthly_income': monthlyIncome,
+      },
+    );
+    if (resp.statusCode >= 400) throw Exception(_error(resp));
+    return CashflowProfileModel.fromJson(
+      jsonDecode(resp.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<CashflowInsightsModel> getCashflowInsights() async {
+    final resp = await _api.get('/analytics/cashflow-insights');
+    if (resp.statusCode >= 400) throw Exception(_error(resp));
+    return CashflowInsightsModel.fromJson(
+      jsonDecode(resp.body) as Map<String, dynamic>,
+    );
   }
 
   Future<List<NotificationTemplateModel>> getNotificationTemplates() async {
     final resp = await _api.get('/notification-templates');
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     final list = jsonDecode(resp.body) as List;
-    return list.map((e) => NotificationTemplateModel.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map(
+          (e) => NotificationTemplateModel.fromJson(e as Map<String, dynamic>),
+        )
+        .toList();
   }
 
   Future<TransactionModel> ingestNotification({
@@ -117,13 +197,17 @@ class TuchiRepository {
     required double amount,
     String? merchant,
   }) async {
-    final resp = await _api.post('/notifications/ingest', body: {
+    final body = <String, dynamic>{
       'package_name': packageName,
       'amount': amount,
-      if (merchant != null) 'merchant': merchant,
-    });
+    };
+    if (merchant != null) body['merchant'] = merchant;
+
+    final resp = await _api.post('/notifications/ingest', body: body);
     if (resp.statusCode >= 400) throw Exception(_error(resp));
-    return TransactionModel.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
+    return TransactionModel.fromJson(
+      jsonDecode(resp.body) as Map<String, dynamic>,
+    );
   }
 
   Future<List<AlertModel>> getAlerts({bool unreadOnly = false}) async {
@@ -131,22 +215,31 @@ class TuchiRepository {
     final resp = await _api.get(path);
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     final list = jsonDecode(resp.body) as List;
-    return list.map((e) => AlertModel.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => AlertModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
-  Future<void> registerDevice({required String fcmToken, String platform = 'android'}) async {
-    final resp = await _api.post('/devices/register', body: {
-      'fcm_token': fcmToken,
-      'platform': platform,
-    });
+  Future<void> registerDevice({
+    required String fcmToken,
+    String platform = 'android',
+  }) async {
+    final resp = await _api.post(
+      '/devices/register',
+      body: {'fcm_token': fcmToken, 'platform': platform},
+    );
     if (resp.statusCode >= 400) throw Exception(_error(resp));
   }
 
-  Future<List<CategoryForecastModel>> getForecasts({bool refresh = false}) async {
+  Future<List<CategoryForecastModel>> getForecasts({
+    bool refresh = false,
+  }) async {
     final resp = await _api.get('/analytics/forecasts?refresh=$refresh');
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     final list = jsonDecode(resp.body) as List;
-    return list.map((e) => CategoryForecastModel.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => CategoryForecastModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<String> getGmailOAuthUrl() async {
@@ -156,15 +249,22 @@ class TuchiRepository {
   }
 
   Future<EmailStatusModel> connectGmail(String authorizationCode) async {
-    final resp = await _api.post('/email/connect', body: {'authorization_code': authorizationCode});
+    final resp = await _api.post(
+      '/email/connect',
+      body: {'authorization_code': authorizationCode},
+    );
     if (resp.statusCode >= 400) throw Exception(_error(resp));
-    return EmailStatusModel.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
+    return EmailStatusModel.fromJson(
+      jsonDecode(resp.body) as Map<String, dynamic>,
+    );
   }
 
   Future<EmailStatusModel> getEmailStatus() async {
     final resp = await _api.get('/email/status');
     if (resp.statusCode >= 400) throw Exception(_error(resp));
-    return EmailStatusModel.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
+    return EmailStatusModel.fromJson(
+      jsonDecode(resp.body) as Map<String, dynamic>,
+    );
   }
 
   Future<int> syncEmails() async {
@@ -178,18 +278,24 @@ class TuchiRepository {
     if (resp.statusCode >= 400) throw Exception(_error(resp));
   }
 
-  Future<List<SubscriptionModel>> getSubscriptions({bool refresh = false}) async {
+  Future<List<SubscriptionModel>> getSubscriptions({
+    bool refresh = false,
+  }) async {
     final resp = await _api.get('/subscriptions?refresh=$refresh');
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     final list = jsonDecode(resp.body) as List;
-    return list.map((e) => SubscriptionModel.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => SubscriptionModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<SubscriptionModel>> detectSubscriptions() async {
     final resp = await _api.post('/subscriptions/detect');
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     final list = jsonDecode(resp.body) as List;
-    return list.map((e) => SubscriptionModel.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => SubscriptionModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> dismissSubscription(int id) async {
@@ -200,7 +306,9 @@ class TuchiRepository {
   Future<PipelineHealthModel> getPipelineHealth({int days = 7}) async {
     final resp = await _api.get('/analytics/pipeline-health?days=$days');
     if (resp.statusCode >= 400) throw Exception(_error(resp));
-    return PipelineHealthModel.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
+    return PipelineHealthModel.fromJson(
+      jsonDecode(resp.body) as Map<String, dynamic>,
+    );
   }
 
   String _error(dynamic resp) {

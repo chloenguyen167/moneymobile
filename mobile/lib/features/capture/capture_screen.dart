@@ -1,181 +1,352 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../core/providers/providers.dart';
 import '../../core/theme/app_colors.dart';
 
-class CaptureScreen extends ConsumerStatefulWidget {
+class CaptureScreen extends StatelessWidget {
   const CaptureScreen({super.key});
 
   @override
-  ConsumerState<CaptureScreen> createState() => _CaptureScreenState();
-}
-
-class _CaptureScreenState extends ConsumerState<CaptureScreen> {
-  Uint8List? _imageBytes;
-  String? _filename;
-  ImageQualityResult? _quality;
-  Map<String, dynamic>? _ocrResult;
-  Map<String, dynamic>? _classification;
-  bool _processing = false;
-  String? _error;
-
-  Future<void> _pickImage(ImageSource source) async {
-    final picker = ImagePicker();
-    final file = await picker.pickImage(source: source, imageQuality: 85);
-    if (file == null) return;
-
-    final bytes = await file.readAsBytes();
-    final quality = evaluateImageQuality(bytes);
-
-    setState(() {
-      _imageBytes = bytes;
-      _filename = file.name;
-      _quality = quality;
-      _ocrResult = null;
-      _classification = null;
-      _error = null;
-    });
-  }
-
-  Future<void> _processReceipt() async {
-    if (_imageBytes == null || _filename == null) return;
-
-    setState(() {
-      _processing = true;
-      _error = null;
-    });
-
-    try {
-      final result = await ref.read(repositoryProvider).processReceipt(
-            _imageBytes!,
-            filename: _filename!,
-            isLowQuality: _quality?.isLowQuality ?? false,
-          );
-      ref.invalidate(transactionsProvider);
-      setState(() {
-        _ocrResult = result.ocr;
-        _classification = result.classification;
-      });
-    } catch (e) {
-      setState(() => _error = e.toString());
-    } finally {
-      setState(() => _processing = false);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFF5F9FC), AppColors.background],
+        ),
+      ),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
         children: [
-          Text(
-            'Chụp hóa đơn',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Edge Gate kiểm tra chất lượng ảnh trước khi gửi OCR cascade',
-            style: const TextStyle(color: AppColors.onSurfaceMuted),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _pickImage(ImageSource.camera),
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text('Camera'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _pickImage(ImageSource.gallery),
-                  icon: const Icon(Icons.photo_library),
-                  label: const Text('Thư viện'),
-                ),
-              ),
+          const _CaptureHero(),
+          const SizedBox(height: 20),
+          _CaptureModeCard(
+            icon: Icons.receipt_long_rounded,
+            eyebrow: 'Receipt OCR',
+            title: 'Hóa đơn mua hàng',
+            subtitle:
+                'Dùng cho siêu thị, cửa hàng, quán ăn và các hóa đơn có nhiều dòng sản phẩm.',
+            bullets: const [
+              'Giữ nguyên pipeline OCR hóa đơn hiện tại',
+              'Phù hợp khi cần tách từng món và cộng dồn theo nhóm',
             ],
+            actionLabel: 'Mở chụp hóa đơn',
+            accent: AppColors.secondary,
+            backgroundTint: const Color(0xFFEAF3FA),
+            onTap: () => context.push('/capture/receipt'),
           ),
-          if (_imageBytes != null) ...[
-            const SizedBox(height: 16),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.memory(_imageBytes!, height: 200, width: double.infinity, fit: BoxFit.cover),
-            ),
-          ],
-          if (_quality != null) ...[
-            const SizedBox(height: 12),
-            Card(
-              color: _quality!.isLowQuality
-                  ? AppColors.primary.withValues(alpha: 0.15)
-                  : AppColors.secondary.withValues(alpha: 0.1),
-              child: ListTile(
-                leading: Icon(
-                  _quality!.isLowQuality ? Icons.warning : Icons.check_circle,
-                  color: _quality!.isLowQuality ? AppColors.warning : AppColors.success,
-                ),
-                title: Text(_quality!.message),
-                subtitle: Text('Blur score: ${_quality!.blurScore.toStringAsFixed(1)}'),
-              ),
-            ),
-          ],
           const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _imageBytes == null || _processing ? null : _processReceipt,
-            icon: _processing
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.document_scanner),
-            label: Text(_processing ? 'Đang xử lý OCR...' : 'Gửi OCR Cascade'),
+          _CaptureModeCard(
+            icon: Icons.account_balance_wallet_rounded,
+            eyebrow: 'Payment OCR',
+            title: 'Ảnh giao dịch ngân hàng / ví',
+            subtitle:
+                'Dùng cho screenshot thanh toán từ TPBank, MoMo, ZaloPay, ShopeePay và các app tương tự.',
+            bullets: const [
+              'Tập trung đọc ra một giao dịch duy nhất',
+              'Tối ưu cho số tiền, người nhận, mã giao dịch và nội dung chuyển khoản',
+            ],
+            actionLabel: 'Mở ảnh giao dịch',
+            accent: AppColors.primary,
+            backgroundTint: const Color(0xFFFFF5CC),
+            onTap: () => context.push('/capture/payment'),
           ),
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          ],
-          if (_ocrResult != null) ...[
-            const SizedBox(height: 24),
-            Text('Kết quả OCR', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            _ResultCard(data: _ocrResult!),
-          ],
-          if (_classification != null) ...[
-            const SizedBox(height: 16),
-            Text('Phân loại', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            _ResultCard(data: _classification!),
-          ],
+          const SizedBox(height: 18),
+          const _CompareCard(),
         ],
       ),
     );
   }
 }
 
-class _ResultCard extends StatelessWidget {
-  const _ResultCard({required this.data});
-
-  final Map<String, dynamic> data;
+class _CaptureHero extends StatelessWidget {
+  const _CaptureHero();
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: data.entries.map((e) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text('${e.key}: ${e.value}'),
-            );
-          }).toList(),
+    final titleStyle = Theme.of(
+      context,
+    ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.secondary, Color(0xFF3E7CAA)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.secondary.withValues(alpha: 0.18),
+            blurRadius: 26,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: const Text(
+              'Nhập ảnh thông minh',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Chọn đúng loại ảnh để OCR ổn định hơn',
+            style: titleStyle?.copyWith(color: Colors.white),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Tuchi tách riêng receipt OCR và payment OCR để tránh nhầm luồng, tăng độ chính xác và giúp kết quả dễ đọc hơn.',
+            style: TextStyle(
+              color: Color(0xFFEAF2F8),
+              height: 1.45,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CaptureModeCard extends StatelessWidget {
+  const _CaptureModeCard({
+    required this.icon,
+    required this.eyebrow,
+    required this.title,
+    required this.subtitle,
+    required this.bullets,
+    required this.actionLabel,
+    required this.accent,
+    required this.backgroundTint,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String eyebrow;
+  final String title;
+  final String subtitle;
+  final List<String> bullets;
+  final String actionLabel;
+  final Color accent;
+  final Color backgroundTint;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(26),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: backgroundTint,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Icon(icon, color: accent, size: 26),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          eyebrow.toUpperCase(),
+                          style: TextStyle(
+                            color: accent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.6,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: AppColors.onSurfaceMuted,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ...bullets.map(
+                (bullet) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.only(top: 5),
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: accent,
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          bullet,
+                          style: const TextStyle(height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  onPressed: onTap,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: accent,
+                    foregroundColor: accent == AppColors.primary
+                        ? AppColors.onPrimary
+                        : AppColors.onSecondary,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: const Icon(Icons.arrow_forward_rounded),
+                  label: Text(actionLabel),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _CompareCard extends StatelessWidget {
+  const _CompareCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text(
+            'Khi nào chọn loại nào?',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+          ),
+          SizedBox(height: 14),
+          _CompareRow(
+            label: 'Hóa đơn',
+            description:
+                'Có nhiều mặt hàng, cần tách item và phân loại từng nhóm.',
+          ),
+          SizedBox(height: 10),
+          _CompareRow(
+            label: 'Ảnh giao dịch',
+            description:
+                'Chỉ có một khoản thanh toán, ưu tiên đọc số tiền và người nhận.',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompareRow extends StatelessWidget {
+  const _CompareRow({required this.label, required this.description});
+
+  final String label;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(top: 4),
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: AppColors.secondary.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: DefaultTextStyle.of(context).style.copyWith(height: 1.45),
+              children: [
+                TextSpan(
+                  text: '$label: ',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                TextSpan(
+                  text: description,
+                  style: const TextStyle(color: AppColors.onSurfaceMuted),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
