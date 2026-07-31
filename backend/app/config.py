@@ -26,7 +26,9 @@ class Settings(BaseSettings):
     firebase_credentials_path: str = ""
     fcm_enabled: bool = False
 
-    # Phase 3: Vintern VLM
+    # Phase 3: Vintern VLM (Transformers pipeline local, HTTP API fallback)
+    vintern_model_id: str = "5CD-AI/Vintern-1B-v3_5"
+    vintern_use_local_pipeline: bool = True
     vintern_api_url: str = ""
     vintern_api_key: str = ""
     vintern_model_name: str = "vintern-1b"

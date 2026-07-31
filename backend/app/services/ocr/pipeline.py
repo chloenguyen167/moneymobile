@@ -9,12 +9,15 @@ from app.config import settings
 from app.models import MerchantReference
 from app.schemas import OcrResult
 from app.services.ocr.fast_track import _has_local_ocr_engine, run_fast_track
+from app.services.ocr.preprocess import preprocess_receipt_image
 from app.services.ocr.reference_correction import fuzzy_match_merchant
 from app.services.ocr.smart_track import run_smart_track
+from app.services.ocr.validate import validate_and_refine
+from app.services.ocr.vintern import is_vintern_available
 
 
 def _vision_ocr_available() -> bool:
-    return bool(settings.vintern_api_url or settings.gemini_api_key or settings.openai_api_key)
+    return bool(is_vintern_available() or settings.gemini_api_key or settings.openai_api_key)
 
 
 async def process_receipt(
@@ -24,13 +27,15 @@ async def process_receipt(
     is_low_quality: bool = False,
     raw_text_hint: Optional[str] = None,
 ) -> OcrResult:
-    # Step 2: Fast Track (local VietOCR) — skip shortcut when only vision APIs are available
+    image_bytes = preprocess_receipt_image(image_bytes)
+
+    # Step 2: Fast Track (local OCR / text hint)
     fast_result = await run_fast_track(image_bytes, raw_text_hint)
 
     amount_found = fast_result.total_amount is not None
     date_found = fast_result.transaction_date is not None
     avg_conf = fast_result.ocr_confidence
-    has_text_hint = bool(raw_text_hint)
+    has_text_hint = bool(raw_text_hint or fast_result.raw_text)
 
     # Step 3: Routing
     if (
@@ -48,6 +53,8 @@ async def process_receipt(
         result = await run_smart_track(image_bytes, fast_result.raw_text or None, end_to_end=False)
     else:
         result = await run_smart_track(image_bytes, None, end_to_end=True)
+
+    result = validate_and_refine(result)
 
     # Step 5: Post-OCR reference correction
     result = await _apply_reference_correction(db, user_id, result)

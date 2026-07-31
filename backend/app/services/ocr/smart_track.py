@@ -9,13 +9,13 @@ import httpx
 
 from app.config import settings
 from app.schemas import OcrResult, ReceiptItem
+from app.services.ocr.prompts import RECEIPT_OCR_PROMPT
+from app.services.ocr.validate import validate_and_refine
 from app.services.ocr.vintern import run_vintern
 
 logger = logging.getLogger(__name__)
 
-SMART_PROMPT = """Extract receipt data from this Vietnamese receipt image/text.
-Return JSON only with keys: merchant, items (array of {name, price, qty}), total_amount (number), transaction_date (YYYY-MM-DD), confidence (0-1).
-If text hint is provided, use it to correct OCR errors especially Vietnamese diacritics."""
+SMART_PROMPT = RECEIPT_OCR_PROMPT
 
 
 def _image_mime(image_bytes: bytes) -> str:
@@ -36,27 +36,27 @@ async def run_smart_track(
     # 1. Vintern-1B self-host (preferred for Vietnamese)
     vintern_result = await run_vintern(image_bytes, raw_text if not end_to_end else None)
     if vintern_result and vintern_result.ocr_confidence >= settings.vintern_confidence_threshold:
-        return vintern_result
+        return validate_and_refine(vintern_result)
 
     # 2. Gemini Flash fallback
     if settings.gemini_api_key:
         gemini = await _gemini_extract(image_bytes, raw_text, end_to_end)
         if gemini and gemini.ocr_confidence >= 0.7:
             gemini.ocr_track_used = "gemini"
-            return gemini
+            return validate_and_refine(gemini)
 
     # 3. OpenAI fallback
     if settings.openai_api_key:
         openai_result = await _openai_extract(image_bytes, raw_text, end_to_end)
         if openai_result:
             openai_result.ocr_track_used = "openai"
-            return openai_result
+            return validate_and_refine(openai_result)
 
     # 4. Use low-confidence Vintern if available
     if vintern_result:
-        return vintern_result
+        return validate_and_refine(vintern_result)
 
-    return _heuristic_smart_fallback(raw_text, end_to_end)
+    return validate_and_refine(_heuristic_smart_fallback(raw_text, end_to_end))
 
 
 async def _gemini_extract(image_bytes: bytes, raw_text: str | None, end_to_end: bool) -> OcrResult | None:
@@ -94,7 +94,9 @@ async def _openai_extract(image_bytes: bytes, raw_text: str | None, end_to_end: 
     user_content: list[dict] = [{"type": "text", "text": SMART_PROMPT}]
     if raw_text and not end_to_end:
         user_content.append({"type": "text", "text": f"OCR hint:\n{raw_text}"})
-    user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+    user_content.append(
+        {"type": "image_url", "image_url": {"url": f"data:{_image_mime(image_bytes)};base64,{b64}"}}
+    )
 
     try:
         async with httpx.AsyncClient(timeout=60) as client:
@@ -117,33 +119,48 @@ async def _openai_extract(image_bytes: bytes, raw_text: str | None, end_to_end: 
 
 
 def _json_to_ocr_result(data: dict, track: str) -> OcrResult:
-    items = [ReceiptItem(**i) for i in data.get("items", []) if "name" in i and "price" in i]
+    from app.services.ocr.items_parser import parse_item_dict
+    from app.services.ocr.parse_utils import parse_vnd_number
+
+    items = []
+    for i in data.get("items", []):
+        if isinstance(i, dict):
+            parsed = parse_item_dict(i)
+            if parsed:
+                items.append(parsed)
+
     tx_date = None
     if data.get("transaction_date"):
         try:
             tx_date = date.fromisoformat(str(data["transaction_date"])[:10])
         except ValueError:
             pass
+
+    total = data.get("total_amount")
+    if isinstance(total, str):
+        total = parse_vnd_number(total)
+
     return OcrResult(
         merchant=data.get("merchant"),
         items=items,
-        total_amount=data.get("total_amount"),
+        total_amount=float(total) if total else None,
         transaction_date=tx_date,
         ocr_track_used=track,
         ocr_confidence=float(data.get("confidence", 0.88)),
+        raw_text=data.get("receipt_text") or data.get("raw_text"),
     )
 
 
 def _heuristic_smart_fallback(raw_text: str | None, end_to_end: bool) -> OcrResult:
-    from app.services.ocr.fast_track import _parse_amount, _parse_date, _parse_items, _parse_merchant
+    from app.services.ocr.parse_utils import parse_amount, parse_date, parse_items, parse_merchant
 
     text = raw_text or ""
     return OcrResult(
-        merchant=_parse_merchant(text) if text else "Unknown Merchant",
-        items=_parse_items(text) if text else [],
-        total_amount=_parse_amount(text),
-        transaction_date=_parse_date(text) or date.today(),
+        merchant=parse_merchant(text) if text else None,
+        items=parse_items(text) if text else [],
+        total_amount=parse_amount(text),
+        transaction_date=parse_date(text),
         ocr_track_used="smart",
-        ocr_confidence=0.75 if text else 0.5,
+        ocr_confidence=0.75 if text else 0.3,
         raw_text=text,
     )

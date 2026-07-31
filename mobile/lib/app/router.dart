@@ -11,6 +11,7 @@ import '../features/home/home_screen.dart';
 import '../features/email/email_settings_screen.dart';
 import '../features/notification_listener/notification_settings_screen.dart';
 import '../features/quick_add/quick_add_screen.dart';
+import '../features/settings/ai_settings_screen.dart';
 import '../features/subscriptions/subscriptions_screen.dart';
 import '../features/transactions/transactions_screen.dart';
 
@@ -30,6 +31,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/settings/notifications', builder: (_, _) => const NotificationSettingsScreen()),
+      GoRoute(path: '/settings/ai', builder: (_, _) => const AiSettingsScreen()),
       GoRoute(path: '/settings/email', builder: (_, _) => const EmailSettingsScreen()),
       GoRoute(path: '/quick-add', builder: (_, _) => const QuickAddScreen()),
       GoRoute(path: '/subscriptions', builder: (_, _) => const SubscriptionsScreen()),

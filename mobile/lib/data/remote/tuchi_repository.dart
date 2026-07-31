@@ -38,39 +38,36 @@ class TuchiRepository {
     return list.map((e) => TransactionModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<ProcessReceiptResult> processReceipt(
-    List<int> bytes, {
-    required String filename,
-    bool isLowQuality = false,
-  }) async {
-    final resp = await _api.multipart(
-      '/transactions/process-receipt',
-      fileBytes: bytes,
-      filename: filename,
-      fields: {'is_low_quality': isLowQuality.toString(), 'auto_save': 'true'},
-    );
-    final body = await resp.stream.bytesToString();
-    if (resp.statusCode >= 400) throw Exception(body);
-    return ProcessReceiptResult.fromJson(jsonDecode(body) as Map<String, dynamic>);
-  }
-
   Future<TransactionModel> confirmCategory(int transactionId, int categoryId) async {
     final resp = await _api.post('/transactions/$transactionId/confirm?category_id=$categoryId');
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     return TransactionModel.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
   }
 
+  /// Lưu giao dịch đã được xử lý on-device (OCR + phân loại chạy trên máy,
+  /// backend chỉ lưu trữ).
   Future<TransactionModel> createTransaction({
     required double amount,
     String? merchantName,
     int? categoryId,
     String source = 'manual',
+    List<Map<String, dynamic>>? items,
+    DateTime? transactionDate,
+    double? confidence,
+    String? classificationReason,
+    String? ocrTrackUsed,
   }) async {
     final resp = await _api.post('/transactions', body: {
       'amount': amount,
       if (merchantName != null) 'merchant_name': merchantName,
       if (categoryId != null) 'category_id': categoryId,
       'source': source,
+      if (items != null && items.isNotEmpty) 'items': items,
+      if (transactionDate != null)
+        'transaction_date': transactionDate.toIso8601String().split('T').first,
+      if (confidence != null) 'confidence': confidence,
+      if (classificationReason != null) 'classification_reason': classificationReason,
+      if (ocrTrackUsed != null) 'ocr_track_used': ocrTrackUsed,
     });
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     return TransactionModel.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
@@ -110,20 +107,6 @@ class TuchiRepository {
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     final list = jsonDecode(resp.body) as List;
     return list.map((e) => NotificationTemplateModel.fromJson(e as Map<String, dynamic>)).toList();
-  }
-
-  Future<TransactionModel> ingestNotification({
-    required String packageName,
-    required double amount,
-    String? merchant,
-  }) async {
-    final resp = await _api.post('/notifications/ingest', body: {
-      'package_name': packageName,
-      'amount': amount,
-      if (merchant != null) 'merchant': merchant,
-    });
-    if (resp.statusCode >= 400) throw Exception(_error(resp));
-    return TransactionModel.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
   }
 
   Future<List<AlertModel>> getAlerts({bool unreadOnly = false}) async {
@@ -195,12 +178,6 @@ class TuchiRepository {
   Future<void> dismissSubscription(int id) async {
     final resp = await _api.post('/subscriptions/$id/dismiss');
     if (resp.statusCode >= 400) throw Exception(_error(resp));
-  }
-
-  Future<PipelineHealthModel> getPipelineHealth({int days = 7}) async {
-    final resp = await _api.get('/analytics/pipeline-health?days=$days');
-    if (resp.statusCode >= 400) throw Exception(_error(resp));
-    return PipelineHealthModel.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
   }
 
   String _error(dynamic resp) {

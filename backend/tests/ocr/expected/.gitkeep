@@ -1,0 +1,8 @@
+# Expected results (optional) — dùng với --compare
+#
+# Ví dụ: tests/ocr/expected/hoa_don_cafe.json
+# {
+#   "merchant": "Phúc Long",
+#   "total_amount": 55000,
+#   "transaction_date": "2026-06-20"
+# }

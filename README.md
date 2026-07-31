@@ -1,15 +1,32 @@
-# Tuchi — App Quản lý Chi tiêu (OCR + AI Classification)
+# Tuchi — App Quản lý Chi tiêu (Android AI on-device)
 
 Triển khai theo [`pipeline_app_quan_ly_chi_tieu.md`](pipeline_app_quan_ly_chi_tieu.md).
 
-**Kiến trúc:** Hybrid Edge-Cloud, hai tầng Cascade (CR-OCR + PVC-Class), Personal Vector Store trên pgvector, Celery cho job định kỳ.
+**Kiến trúc hiện tại (Android-first):** AI on-device qua AI Provider Interface (Gemini Nano → Gemma 3n → Cloud fallback), backend tập trung lưu trữ + analytics + đồng bộ.
 
 ```
 Flutter (Riverpod)  →  FastAPI  →  PostgreSQL + pgvector
                          ↓
                     Redis + Celery (forecast, alerts, graph, email sync)
-                         ↓
-              OCR cascade / Classify cascade / LLM APIs
+```
+
+## Android AIProvider (production path)
+
+- Capture hóa đơn và parse notification chạy **on-device** qua `AIProvider`: `Gemini Nano (ML Kit GenAI)` → `Gemma 3n (LiteRT-LM)` → `Cloud API` fallback.
+- Mobile **không upload ảnh** lên backend để OCR/classify; backend nhận transaction đã parse qua `POST /api/v1/transactions`.
+- Endpoint `POST /api/v1/transactions/process-receipt` đã **deprecated** và trả `410 Gone`.
+
+### Offline / Demo (không cần backend)
+
+Trên màn Login bấm **「Dùng offline (không cần backend)」**:
+- Bỏ qua đăng nhập & API Tuchi
+- AI vẫn chạy trên máy (Settings AI → Nano / Gemma / Cloud)
+- Giao dịch, category, budget, analytics lưu cục bộ (SharedPreferences)
+- Email / subscription server-side không dùng được ở mode này
+
+```bash
+cd mobile && flutter build apk --debug
+# Cài: mobile/build/app/outputs/flutter-apk/app-debug.apk
 ```
 
 ---
@@ -43,7 +60,7 @@ Flutter (Riverpod)  →  FastAPI  →  PostgreSQL + pgvector
 | Màn hình | Mô tả |
 |---|---|
 | **Giao dịch** | Danh sách transaction, swipe xác nhận category |
-| **Chụp HĐ** | Camera + Edge Gate IQA (Laplacian variance) trước khi upload |
+| **Chụp HĐ** | Camera + IQA + OCR/classify on-device (Layer0 + AI Provider) |
 | **Budget** | Tạo/xem ngân sách theo category |
 | **Phân tích** | Biểu đồ pie + line chart chi tiêu |
 
@@ -54,7 +71,7 @@ Flutter (Riverpod)  →  FastAPI  →  PostgreSQL + pgvector
 | `POST /api/v1/auth/register` | Đăng ký |
 | `POST /api/v1/auth/login` | Đăng nhập |
 | `GET /api/v1/auth/me` | Thông tin user |
-| `POST /api/v1/transactions/process-receipt` | Upload ảnh → OCR + classify |
+| `POST /api/v1/transactions/process-receipt` | Deprecated (`410`) — OCR/classify đã chuyển sang Android on-device |
 | `GET /api/v1/transactions` | Danh sách giao dịch |
 | `POST /api/v1/transactions` | Tạo giao dịch thủ công |
 | `POST /api/v1/transactions/{id}/confirm` | Xác nhận category |
@@ -72,7 +89,7 @@ Flutter (Riverpod)  →  FastAPI  →  PostgreSQL + pgvector
 |---|---|
 | **Personal Vector Store** | Top-k kNN voting trên `personal_merchant_embeddings`, HNSW index |
 | **Embedding nâng cao** | Sentence-transformer (`paraphrase-multilingual-mpnet-base-v2`) khi bật |
-| **Notification ingest** | Nhận structured fields từ Android, dedup, classify |
+| **Notification ingest** | Nhận structured fields từ Android, dedup, lưu transaction (không classify server-side) |
 | **Template động** | Server phục vụ regex template theo `package_name` |
 | **Budget alerts** | Cảnh báo 80%/100% ngân sách, dedup theo category/tháng |
 | **FCM push** | Firebase Cloud Messaging cho alert realtime |
@@ -152,9 +169,29 @@ Flutter (Riverpod)  →  FastAPI  →  PostgreSQL + pgvector
 | `GMAIL_CLIENT_SECRET` | OAuth client secret |
 | `GMAIL_REDIRECT_URI` | Redirect URI OAuth |
 
-### Vintern trên Modal (khuyến nghị)
+### Vintern — Transformers local (khuyến nghị)
 
-Fast Track hiện **không** dùng dữ liệu mock — ảnh hóa đơn được gửi qua Smart Track (Vintern → Gemini → OpenAI).
+Vintern chạy qua `AutoModel.chat()` (không dùng `pipeline()` — model không hỗ trợ):
+
+```bash
+cd backend
+pip install -r requirements-ocr.txt   # transformers, torch, torchvision (~3.7GB model lần đầu)
+
+python3 scripts/ocr_test.py tests/ocr/images/hoa_don_share_tea.jpg --track vintern
+```
+
+Biến môi trường (`.env`):
+
+| Biến | Mô tả |
+|---|---|
+| `VINTERN_MODEL_ID` | Mặc định `5CD-AI/Vintern-1B-v3_5` |
+| `VINTERN_USE_LOCAL_PIPELINE` | `true` (mặc định) — dùng pipeline local |
+
+**GPU:** CUDA hoặc Apple MPS nếu có; không có thì chạy CPU (chậm hơn).
+
+### Vintern HTTP API (tuỳ chọn — Modal/vLLM)
+
+Nếu không muốn load model local, set `VINTERN_USE_LOCAL_PIPELINE=false` và deploy Modal:
 
 ```bash
 # 1. Cài Modal CLI (đã chạy modal setup)
@@ -182,6 +219,36 @@ curl https://<workspace>--tuchi-vintern-vinternserver-web.modal.run/health
 ```
 
 **Lưu ý:** `GEMINI_API_KEY` cần key hợp lệ từ [Google AI Studio](https://aistudio.google.com/apikey) (dạng `AIza...`). Key không hợp lệ hoặc hết quota sẽ fallback sang Vintern/OpenAI.
+
+### Test OCR riêng (không cần mobile app)
+
+Dùng để kiểm tra độ chính xác trích xuất hóa đơn tiếng Việt từ terminal:
+
+```bash
+cd backend
+pip install -r requirements.txt
+pip install -r requirements-ocr.txt   # EasyOCR + Vintern (transformers, torch)
+
+# Đặt ảnh hóa đơn vào tests/ocr/images/
+cp ~/Downloads/hoa_don.jpg tests/ocr/images/
+
+# Chạy OCR tất cả ảnh
+python scripts/ocr_test.py --all
+
+# Hoặc một ảnh / buộc track cụ thể
+python scripts/ocr_test.py tests/ocr/images/hoa_don.jpg
+python3 scripts/ocr_test.py --all --track vintern   # Transformers pipeline
+python3 scripts/ocr_test.py --all --track local     # EasyOCR + regex
+python scripts/ocr_test.py --all --compare        # so với expected/*.json
+```
+
+Kết quả lưu tại `backend/tests/ocr/output/`. Chi tiết: [`backend/tests/ocr/README.md`](backend/tests/ocr/README.md).
+
+Cải thiện OCR gần đây:
+- Tiền xử lý ảnh OpenCV (denoise, CLAHE, sharpen)
+- Parser số VND (`55.000`, `1.234.567`)
+- Validation tổng vs items, điều chỉnh confidence
+- Prompt tiếng Việt chi tiết cho Vintern/Gemini/OpenAI
 
 ---
 

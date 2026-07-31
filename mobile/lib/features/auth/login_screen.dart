@@ -78,15 +78,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
     try {
+      await AppConfig.setOfflineMode(false);
       if (_showServer || _serverUrl.text.trim().isNotEmpty) {
         await AppConfig.saveApiBaseUrl(_serverUrl.text);
       }
+      ref.invalidate(repositoryProvider);
       final repo = ref.read(repositoryProvider);
       if (_isRegister) {
         await repo.register(_email.text.trim(), _password.text, displayName: _name.text.trim());
       } else {
         await repo.login(_email.text.trim(), _password.text);
       }
+      ref.invalidate(authTokenProvider);
+      if (mounted) context.go('/');
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Demo không cần backend: AI on-device + lưu giao dịch trên máy.
+  Future<void> _enterOffline() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await AppConfig.setOfflineMode(true);
+      ref.invalidate(repositoryProvider);
       ref.invalidate(authTokenProvider);
       if (mounted) context.go('/');
     } catch (e) {
@@ -117,7 +137,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Quản lý chi tiêu thông minh — OCR + AI',
+                    'Quản lý chi tiêu thông minh — AI on-device',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.onSurfaceMuted),
                   ),
@@ -200,6 +220,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                           : Text(_isRegister ? 'Đăng ký' : 'Đăng nhập'),
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _loading ? null : _enterOffline,
+                    icon: const Icon(Icons.smartphone),
+                    label: const Text('Dùng offline (không cần backend)'),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'AI chạy trên máy (Nano/Gemma/Cloud). Giao dịch lưu cục bộ để test APK.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: AppColors.onSurfaceMuted),
                   ),
                   TextButton(
                     onPressed: _loading ? null : () => setState(() => _isRegister = !_isRegister),

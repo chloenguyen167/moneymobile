@@ -1,0 +1,11 @@
+# OCR dependencies — Fast Track (EasyOCR) + Vintern (Transformers AutoModel.chat)
+# pip install -r requirements-ocr.txt
+# Vintern requires transformers 4.46–4.49 (NOT 5.x — breaks all_tied_weights_keys)
+easyocr>=1.7.2
+transformers==4.46.3
+torch>=2.4.0
+torchvision>=0.19.0
+pillow>=11.0.0
+accelerate==1.1.1
+einops>=0.8.0
+timm>=1.0.0

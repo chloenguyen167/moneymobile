@@ -8,20 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.deps import get_current_user
 from app.models import Transaction, User
-from app.schemas import (
-    ClassificationResult,
-    OcrResult,
-    ProcessReceiptResponse,
-    TransactionCreate,
-    TransactionOut,
-    TransactionUpdate,
-)
+from app.schemas import TransactionCreate, TransactionOut, TransactionUpdate
 from app.services.analytics import check_budget_alerts
-from app.services.classify.pipeline import classify_transaction
-from app.services.ocr.pipeline import process_receipt
 from app.services.transactions import (
     add_merchant_reference,
-    create_transaction_from_ocr,
     save_transaction,
     to_transaction_out,
     update_merchant_graph,
@@ -30,7 +20,7 @@ from app.services.transactions import (
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 
-@router.post("/process-receipt", response_model=ProcessReceiptResponse)
+@router.post("/process-receipt", deprecated=True)
 async def process_receipt_endpoint(
     file: UploadFile = File(...),
     is_low_quality: bool = Form(False),
@@ -39,16 +29,13 @@ async def process_receipt_endpoint(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    image_bytes = await file.read()
-    ocr: OcrResult = await process_receipt(db, user.id, image_bytes, is_low_quality, raw_text_hint)
-    classification: ClassificationResult = await classify_transaction(db, user.id, ocr)
-
-    tx_id = None
-    if auto_save and ocr.total_amount:
-        tx = await create_transaction_from_ocr(db, user.id, ocr, classification)
-        tx_id = tx.id
-
-    return ProcessReceiptResponse(ocr=ocr, classification=classification, transaction_id=tx_id)
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "Endpoint da bi ngung. OCR/classify chay on-device tren Android. "
+            "Hay gui ket qua da parse bang POST /transactions."
+        ),
+    )
 
 
 @router.post("", response_model=TransactionOut)

@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/ai/ai_service.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_colors.dart';
+import '../../data/models/models.dart';
 
 class AnalyticsScreen extends ConsumerWidget {
   const AnalyticsScreen({super.key});
@@ -13,7 +15,7 @@ class AnalyticsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final analyticsAsync = ref.watch(analyticsProvider);
     final alertsAsync = ref.watch(alertsProvider);
-    final pipelineAsync = ref.watch(pipelineHealthProvider);
+    final budgetsAsync = ref.watch(budgetsProvider);
     final subsSummaryAsync = ref.watch(subscriptionsProvider);
 
     return analyticsAsync.when(
@@ -24,7 +26,7 @@ class AnalyticsScreen extends ConsumerWidget {
           onRefresh: () async {
             ref.invalidate(analyticsProvider);
             ref.invalidate(alertsProvider);
-            ref.invalidate(pipelineHealthProvider);
+            ref.invalidate(budgetsProvider);
             ref.invalidate(subscriptionsProvider);
             await ref.read(analyticsProvider.future);
           },
@@ -187,62 +189,10 @@ class AnalyticsScreen extends ConsumerWidget {
                   );
                 },
               ),
-              pipelineAsync.when(
-                loading: () => const SizedBox.shrink(),
-                error: (_, _) => const SizedBox.shrink(),
-                data: (health) {
-                  if (health.ocrTotal == 0 && health.classifyTotal == 0) return const SizedBox.shrink();
-                  final isWarning = health.status == 'warning';
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 24),
-                      Text('Pipeline health (${health.periodDays} ngày)', style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 8),
-                      Card(
-                        color: isWarning ? AppColors.primary.withValues(alpha: 0.15) : null,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    isWarning ? Icons.warning_amber : Icons.check_circle,
-                                    color: isWarning ? AppColors.warning : AppColors.success,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    isWarning ? 'Cần tối ưu GPU' : 'Ổn định',
-                                    style: const TextStyle(fontWeight: FontWeight.w600),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'OCR smart track: ${health.ocrSmartTrackPct.toStringAsFixed(1)}% · '
-                                'Classify LLM: ${health.classifySmartTrackPct.toStringAsFixed(1)}% · '
-                                'Mục tiêu ≤ ${health.targetSmartTrackPct.toStringAsFixed(0)}%',
-                                style: const TextStyle(color: AppColors.onSurfaceMuted, fontSize: 12),
-                              ),
-                              if (health.recommendations.isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                ...health.recommendations.map(
-                                  (r) => Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text('• $r', style: const TextStyle(color: AppColors.onSurfaceMuted, fontSize: 12)),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
+              const SizedBox(height: 24),
+              _AiInsightCard(
+                summary: summary,
+                budgets: budgetsAsync.valueOrNull ?? const [],
               ),
               alertsAsync.when(
                 loading: () => const SizedBox.shrink(),
@@ -271,6 +221,104 @@ class AnalyticsScreen extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Gợi ý AI cá nhân hóa: số liệu được tính sẵn rule-based (chính xác 100%),
+/// AI on-device chỉ diễn giải — không tự tính hay bịa con số.
+class _AiInsightCard extends ConsumerStatefulWidget {
+  const _AiInsightCard({required this.summary, required this.budgets});
+
+  final AnalyticsSummaryModel summary;
+  final List<BudgetModel> budgets;
+
+  @override
+  ConsumerState<_AiInsightCard> createState() => _AiInsightCardState();
+}
+
+class _AiInsightCardState extends ConsumerState<_AiInsightCard> {
+  String? _insight;
+  bool _loading = false;
+  String? _error;
+
+  Map<String, dynamic> _buildStats() {
+    final s = widget.summary;
+    final topCategories = [...s.byCategory]
+      ..sort((a, b) => ((b['amount'] as num)).compareTo(a['amount'] as num));
+    return {
+      'tong_chi_thang_nay_vnd': s.totalSpent.round(),
+      'du_bao_cuoi_thang_vnd': s.forecastEndOfMonth.round(),
+      'phan_tram_so_voi_nhip_do_binh_thuong': s.onPacePercent.round(),
+      'top_category': topCategories
+          .take(3)
+          .map((c) => {'ten': c['category'], 'so_tien_vnd': (c['amount'] as num).round()})
+          .toList(),
+      'ngan_sach': widget.budgets
+          .map((b) => {
+                'category': b.categoryName,
+                'phan_tram_da_dung': b.percentUsed.round(),
+                'vuot': b.percentUsed >= 100,
+              })
+          .toList(),
+    };
+  }
+
+  Future<void> _generate() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final insight =
+          await ref.read(aiServiceProvider).generateInsight(_buildStats());
+      setState(() {
+        _insight = insight;
+        if (insight == null) {
+          _error = 'Chưa có AI engine khả dụng — kiểm tra Cài đặt AI';
+        }
+      });
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Gợi ý AI', style: Theme.of(context).textTheme.titleMedium),
+            TextButton.icon(
+              onPressed: _loading ? null : _generate,
+              icon: _loading
+                  ? const SizedBox(
+                      width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.auto_awesome, size: 18),
+              label: Text(_insight == null ? 'Tạo gợi ý' : 'Làm mới'),
+            ),
+          ],
+        ),
+        Card(
+          color: AppColors.secondary.withValues(alpha: 0.08),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: _error != null
+                ? Text(_error!, style: const TextStyle(color: AppColors.warning, fontSize: 13))
+                : Text(
+                    _insight ??
+                        'Nhấn "Tạo gợi ý" để AI on-device diễn giải số liệu chi tiêu '
+                            'của bạn thành nhận xét cá nhân hóa.',
+                    style: const TextStyle(fontSize: 13, height: 1.5),
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }

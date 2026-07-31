@@ -6,15 +6,22 @@ import 'package:image/image.dart' as img;
 
 import '../../core/network/api_client.dart';
 import '../../data/models/models.dart';
-import '../../data/remote/tuchi_repository.dart';
+import '../../core/config/app_config.dart';
+import '../../data/repository.dart';
 
 final secureStorageProvider = Provider((_) => const FlutterSecureStorage());
 
 final apiClientProvider = Provider((ref) => ApiClient(ref.watch(secureStorageProvider)));
 
-final repositoryProvider = Provider((ref) => TuchiRepository(ref.watch(apiClientProvider)));
+final repositoryProvider = Provider<AppRepository>((ref) {
+  return AppRepository.fromConfig(ref.watch(apiClientProvider));
+});
+
+/// Offline demo dùng token giả để bypass màn login.
+const kOfflineDemoToken = 'offline-demo';
 
 final authTokenProvider = FutureProvider<String?>((ref) async {
+  if (AppConfig.offlineMode) return kOfflineDemoToken;
   return ref.watch(apiClientProvider).token;
 });
 
@@ -40,10 +47,6 @@ final alertsProvider = FutureProvider<List<AlertModel>>((ref) async {
 
 final subscriptionsProvider = FutureProvider<List<SubscriptionModel>>((ref) async {
   return ref.watch(repositoryProvider).getSubscriptions();
-});
-
-final pipelineHealthProvider = FutureProvider<PipelineHealthModel>((ref) async {
-  return ref.watch(repositoryProvider).getPipelineHealth();
 });
 
 final notificationTemplatesProvider = FutureProvider<List<NotificationTemplateModel>>((ref) async {

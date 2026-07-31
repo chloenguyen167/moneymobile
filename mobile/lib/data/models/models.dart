@@ -12,6 +12,13 @@ class CategoryModel {
         icon: json['icon'] as String?,
         isUserDefined: json['is_user_defined'] as bool? ?? false,
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        if (icon != null) 'icon': icon,
+        'is_user_defined': isUserDefined,
+      };
 }
 
 class TransactionModel {
@@ -57,6 +64,41 @@ class TransactionModel {
         createdAt: DateTime.parse(json['created_at'] as String),
         classificationReason: json['classification_reason'] as String?,
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        if (merchantName != null) 'merchant_name': merchantName,
+        'amount': amount,
+        if (items != null) 'items': items,
+        if (categoryId != null) 'category_id': categoryId,
+        if (categoryName != null) 'category_name': categoryName,
+        'source': source,
+        if (confidence != null) 'confidence': confidence,
+        if (ocrTrackUsed != null) 'ocr_track_used': ocrTrackUsed,
+        'transaction_date': transactionDate.toIso8601String().split('T').first,
+        'created_at': createdAt.toIso8601String(),
+        if (classificationReason != null) 'classification_reason': classificationReason,
+      };
+
+  TransactionModel copyWith({
+    int? categoryId,
+    String? categoryName,
+    String? classificationReason,
+  }) =>
+      TransactionModel(
+        id: id,
+        amount: amount,
+        source: source,
+        transactionDate: transactionDate,
+        createdAt: createdAt,
+        merchantName: merchantName,
+        categoryId: categoryId ?? this.categoryId,
+        categoryName: categoryName ?? this.categoryName,
+        confidence: confidence,
+        ocrTrackUsed: ocrTrackUsed,
+        classificationReason: classificationReason ?? this.classificationReason,
+        items: items,
+      );
 }
 
 class BudgetModel {
@@ -87,6 +129,16 @@ class BudgetModel {
         spent: (json['spent'] as num?)?.toDouble() ?? 0,
         percentUsed: (json['percent_used'] as num?)?.toDouble() ?? 0,
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'category_id': categoryId,
+        if (categoryName != null) 'category_name': categoryName,
+        'limit_amount': limitAmount,
+        'period': period,
+        'spent': spent,
+        'percent_used': percentUsed,
+      };
 }
 
 class AnalyticsSummaryModel {
@@ -157,20 +209,6 @@ class EmailStatusModel {
         connected: json['connected'] as bool,
         email: json['email'] as String?,
         lastSyncAt: json['last_sync_at'] as String?,
-      );
-}
-
-class ProcessReceiptResult {
-  ProcessReceiptResult({required this.ocr, required this.classification, this.transactionId});
-
-  final Map<String, dynamic> ocr;
-  final Map<String, dynamic> classification;
-  final int? transactionId;
-
-  factory ProcessReceiptResult.fromJson(Map<String, dynamic> json) => ProcessReceiptResult(
-        ocr: json['ocr'] as Map<String, dynamic>,
-        classification: json['classification'] as Map<String, dynamic>,
-        transactionId: json['transaction_id'] as int?,
       );
 }
 
@@ -257,41 +295,3 @@ class SubscriptionModel {
       );
 }
 
-class PipelineHealthModel {
-  PipelineHealthModel({
-    required this.status,
-    required this.periodDays,
-    required this.ocrTotal,
-    required this.ocrSmartTrackPct,
-    required this.classifyTotal,
-    required this.classifySmartTrackPct,
-    required this.targetSmartTrackPct,
-    required this.recommendations,
-    required this.dailyBreakdown,
-    required this.currentThresholds,
-  });
-
-  final String status;
-  final int periodDays;
-  final int ocrTotal;
-  final double ocrSmartTrackPct;
-  final int classifyTotal;
-  final double classifySmartTrackPct;
-  final double targetSmartTrackPct;
-  final List<String> recommendations;
-  final List<Map<String, dynamic>> dailyBreakdown;
-  final Map<String, dynamic> currentThresholds;
-
-  factory PipelineHealthModel.fromJson(Map<String, dynamic> json) => PipelineHealthModel(
-        status: json['status'] as String,
-        periodDays: json['period_days'] as int,
-        ocrTotal: json['ocr_total'] as int,
-        ocrSmartTrackPct: (json['ocr_smart_track_pct'] as num).toDouble(),
-        classifyTotal: json['classify_total'] as int,
-        classifySmartTrackPct: (json['classify_smart_track_pct'] as num).toDouble(),
-        targetSmartTrackPct: (json['target_smart_track_pct'] as num).toDouble(),
-        recommendations: (json['recommendations'] as List).cast<String>(),
-        dailyBreakdown: (json['daily_breakdown'] as List).cast<Map<String, dynamic>>(),
-        currentThresholds: json['current_thresholds'] as Map<String, dynamic>,
-      );
-}

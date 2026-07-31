@@ -41,8 +41,9 @@ class CategoryOut(BaseModel):
 
 class ReceiptItem(BaseModel):
     name: str
-    price: float
-    qty: int = 1
+    price: float  # đơn giá (unit price)
+    qty: float = 1  # số lượng — có thể thập phân (kg)
+    line_total: Optional[float] = None  # thành tiền dòng (nếu có)
 
 
 class OcrResult(BaseModel):
@@ -123,6 +124,8 @@ class NotificationFieldsIn(BaseModel):
     merchant: Optional[str] = None
     transaction_time: Optional[datetime] = None
     sign: str = "-"
+    category_id: Optional[int] = None
+    category_name: Optional[str] = None
 
 
 class NotificationTemplateOut(BaseModel):

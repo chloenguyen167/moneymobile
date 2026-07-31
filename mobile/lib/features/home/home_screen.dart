@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/config/app_config.dart';
 import '../../core/providers/providers.dart';
 import '../notification_listener/notification_service.dart';
 
@@ -27,6 +28,11 @@ class HomeScreen extends ConsumerWidget {
             onPressed: () => context.push('/subscriptions'),
           ),
           IconButton(
+            icon: const Icon(Icons.auto_awesome_outlined),
+            tooltip: 'Cài đặt AI',
+            onPressed: () => context.push('/settings/ai'),
+          ),
+          IconButton(
             icon: const Icon(Icons.email_outlined),
             tooltip: 'Email (iOS)',
             onPressed: () => context.push('/settings/email'),
@@ -42,6 +48,8 @@ class HomeScreen extends ConsumerWidget {
               await ref.read(notificationCaptureProvider).stop();
               ref.read(alertPollerProvider).stop();
               await ref.read(repositoryProvider).logout();
+              await AppConfig.setOfflineMode(false);
+              ref.invalidate(repositoryProvider);
               ref.invalidate(authTokenProvider);
               if (context.mounted) context.go('/login');
             },

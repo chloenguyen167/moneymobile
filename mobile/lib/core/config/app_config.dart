@@ -5,13 +5,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AppConfig {
   static const _envApiBaseUrl = String.fromEnvironment('API_BASE_URL');
   static const prefsKey = 'api_base_url';
+  static const offlinePrefsKey = 'offline_mode';
 
   static String? _savedUrl;
+  static bool _offlineMode = false;
 
   /// Gọi trong main() trước runApp.
   static Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     _savedUrl = prefs.getString(prefsKey);
+    _offlineMode = prefs.getBool(offlinePrefsKey) ?? false;
+  }
+
+  static bool get offlineMode => _offlineMode;
+
+  /// Chế độ demo: không cần backend, lưu giao dịch trên máy, AI vẫn on-device.
+  static Future<void> setOfflineMode(bool enabled) async {
+    _offlineMode = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(offlinePrefsKey, enabled);
   }
 
   static Future<void> saveApiBaseUrl(String url) async {

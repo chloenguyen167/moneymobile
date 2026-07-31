@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/ai/ai_service.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../notification_listener/notification_parser.dart';
@@ -35,8 +36,26 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       _error = null;
     });
 
+    final ai = ref.read(aiServiceProvider);
+
+    // Lớp 0: regex — lớp 1: AI local fallback
+    double? amount;
+    String? merchant;
+    String? category;
     final parsed = parseGenericAmount(text);
-    if (parsed == null) {
+    if (parsed != null) {
+      amount = parsed.amount;
+      merchant = parsed.merchant;
+    } else {
+      final aiParsed = await ai.parseNotification(text);
+      if (aiParsed != null && aiParsed.isExpense) {
+        amount = aiParsed.amount;
+        merchant = aiParsed.merchant;
+        category = aiParsed.category;
+      }
+    }
+
+    if (amount == null) {
       setState(() {
         _error = 'Không tìm thấy số tiền trong text';
         _loading = false;
@@ -45,10 +64,18 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     }
 
     try {
-      await ref.read(repositoryProvider).ingestNotification(
-            packageName: 'manual.share',
-            amount: parsed.amount,
-            merchant: parsed.merchant,
+      category ??= merchant != null ? await ai.classifyMerchant(merchant) : null;
+      int? categoryId;
+      if (category != null) {
+        final categories = await ref.read(repositoryProvider).getCategories();
+        categoryId = categories.where((c) => c.name == category).firstOrNull?.id;
+      }
+      await ref.read(repositoryProvider).createTransaction(
+            amount: amount,
+            merchantName: merchant,
+            categoryId: categoryId,
+            source: 'manual',
+            classificationReason: 'on-device quick add',
           );
       ref.invalidate(transactionsProvider);
       if (mounted) Navigator.pop(context, true);
