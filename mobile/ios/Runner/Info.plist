@@ -32,9 +32,11 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Tuchi cần camera để chụp hóa đơn.</string>
+	<string>Tuchi cần camera để chụp hóa đơn và screenshot thanh toán.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Tuchi cần thư viện ảnh để chọn hóa đơn.</string>
+	<string>Tuchi cần thư viện ảnh để chọn hóa đơn và screenshot thanh toán.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Tuchi có thể lưu ảnh hóa đơn đã xử lý vào thư viện khi bạn yêu cầu.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

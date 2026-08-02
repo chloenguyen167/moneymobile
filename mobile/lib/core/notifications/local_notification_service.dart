@@ -49,14 +49,26 @@ class LocalNotificationService {
     _initialized = true;
   }
 
-  /// Android 13+ runtime permission for posting notifications.
-  Future<bool> requestPostNotificationsPermission() async {
-    if (!Platform.isAndroid) return true;
+  /// Runtime permission for posting local notifications (Android 13+ / iOS).
+  Future<bool> requestNotificationPermission() async {
     await init();
-    final androidPlugin = _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    final granted = await androidPlugin?.requestNotificationsPermission();
-    return granted ?? true;
+    if (Platform.isAndroid) {
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      final granted = await androidPlugin?.requestNotificationsPermission();
+      return granted ?? true;
+    }
+    if (Platform.isIOS) {
+      final iosPlugin = _plugin
+          .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
+      final granted = await iosPlugin?.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      return granted ?? true;
+    }
+    return true;
   }
 
   Future<void> showBudgetAlert({
@@ -65,9 +77,7 @@ class LocalNotificationService {
     Map<String, dynamic>? payload,
   }) async {
     await init();
-    if (Platform.isAndroid) {
-      await requestPostNotificationsPermission();
-    }
+    await requestNotificationPermission();
     _id++;
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
@@ -87,7 +97,7 @@ class LocalNotificationService {
   Future<void> showForegroundService() async {
     if (!Platform.isAndroid) return;
     await init();
-    await requestPostNotificationsPermission();
+    await requestNotificationPermission();
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
         'tuchi_foreground',
