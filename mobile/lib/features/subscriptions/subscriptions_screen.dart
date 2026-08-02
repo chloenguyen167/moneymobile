@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/format.dart';
 import '../../data/models/models.dart';
 
 class SubscriptionsScreen extends ConsumerWidget {

@@ -29,6 +29,11 @@ class TransactionSource(str, enum.Enum):
     email = "email"
 
 
+class TransactionType(str, enum.Enum):
+    expense = "expense"
+    income = "income"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -83,6 +88,10 @@ class Transaction(Base):
     amount: Mapped[float] = mapped_column(Float)
     items: Mapped[Optional[dict]] = mapped_column(JSONB)
     category_id: Mapped[Optional[int]] = mapped_column(ForeignKey("categories.id"))
+    transaction_type: Mapped[TransactionType] = mapped_column(
+        Enum(TransactionType), default=TransactionType.expense, server_default="expense"
+    )
+    image_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     source: Mapped[TransactionSource] = mapped_column(Enum(TransactionSource))
     confidence: Mapped[Optional[float]] = mapped_column(Float)
     ocr_track_used: Mapped[Optional[str]] = mapped_column(String(20))

@@ -41,8 +41,9 @@ class CategoryOut(BaseModel):
 
 class ReceiptItem(BaseModel):
     name: str
-    price: float
-    qty: int = 1
+    price: float  # thành tiền (line total)
+    qty: float = 1
+    unit_price: Optional[float] = None  # đơn giá
     raw_name: Optional[str] = None
     normalized_name: Optional[str] = None
     canonical_name: Optional[str] = None
@@ -88,6 +89,8 @@ class TransactionCreate(BaseModel):
     amount: float
     items: Optional[list[ReceiptItem]] = None
     category_id: Optional[int] = None
+    transaction_type: str = "expense"
+    image_path: Optional[str] = None
     source: str = "manual"
     transaction_date: Optional[date] = None
     ocr_track_used: Optional[str] = None
@@ -99,6 +102,13 @@ class TransactionUpdate(BaseModel):
     category_id: Optional[int] = None
     merchant_name: Optional[str] = None
     amount: Optional[float] = None
+    transaction_date: Optional[date] = None
+    transaction_type: Optional[str] = None
+
+
+class ItemCategoryOut(BaseModel):
+    id: Optional[int] = None
+    name: str
 
 
 class TransactionOut(BaseModel):
@@ -108,6 +118,9 @@ class TransactionOut(BaseModel):
     items: Optional[list] = None
     category_id: Optional[int]
     category_name: Optional[str] = None
+    item_categories: list[ItemCategoryOut] = []
+    transaction_type: str = "expense"
+    has_image: bool = False
     source: str
     confidence: Optional[float]
     ocr_track_used: Optional[str]
@@ -215,6 +228,16 @@ class ProcessPaymentScreenshotResponse(BaseModel):
     extraction: PaymentScreenshotExtract
     classification: ClassificationResult
     transaction_id: Optional[int] = None
+
+
+class ProcessImageResponse(BaseModel):
+    """Unified capture response after auto-detecting receipt vs payment screenshot."""
+
+    kind: str  # receipt | payment_screenshot
+    transaction_id: Optional[int] = None
+    ocr: Optional[OcrResult] = None
+    extraction: Optional[PaymentScreenshotExtract] = None
+    classification: Optional[ClassificationResult] = None
 
 
 class SubscriptionOut(BaseModel):

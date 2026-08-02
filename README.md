@@ -116,8 +116,8 @@ Flutter (Riverpod)  →  FastAPI  →  PostgreSQL + pgvector
 
 | Thành phần | Mô tả |
 |---|---|
-| **Smart Track OCR cascade** | Vintern-1B → Gemini Flash → OpenAI → heuristic |
-| **LLM Taxonomy Expansion** | TELEClass-style enrichment + dynamic user categories |
+| **Smart Track OCR cascade** | VietOCR Fast Track; fallback Vintern → Gemini → OpenAI |
+| **LLM Taxonomy Expansion** | Qwen3 8B (Ollama) + TELEClass enrichment + dynamic user categories |
 | **Cold-start Graph** | Fuzzy merchant lookup + weekly `rebuild_merchant_graph` |
 | **Holt-Winters forecast** | Dự báo chi tiêu theo category (`statsmodels`) |
 | **Gmail OAuth** | Parse email ngân hàng/VN cho iOS (read-only) |
@@ -145,7 +145,12 @@ Flutter (Riverpod)  →  FastAPI  →  PostgreSQL + pgvector
 
 | Biến | Mô tả |
 |---|---|
-| `VINTERN_API_URL` | URL OpenAI-compatible (vLLM/RunPod/Modal) cho Vintern-1B |
+| `VIETOCR_ENABLED` | Bật VietOCR local (mặc định `true`) |
+| `VIETOCR_MODEL` | `vgg_seq2seq` (nhanh) hoặc `vgg_transformer` |
+| `OLLAMA_ENABLED` | Bật Ollama cho **LLM phân loại** (mặc định `true`) |
+| `OLLAMA_BASE_URL` | URL Ollama (host: `http://127.0.0.1:11434`, Docker: `http://host.docker.internal:11434`) |
+| `OLLAMA_LLM_MODEL` | Model LLM text / phân loại (mặc định `qwen3:8b`) |
+| `VINTERN_API_URL` | URL OpenAI-compatible phụ (vLLM/RunPod/Modal) cho Vintern-1B |
 | `VINTERN_API_KEY` | API key Vintern (nếu cần) |
 | `VINTERN_MODEL_NAME` | Tên model (mặc định `vintern-1b`) |
 | `GEMINI_API_KEY` | Fallback OCR + classification |
@@ -154,9 +159,23 @@ Flutter (Riverpod)  →  FastAPI  →  PostgreSQL + pgvector
 | `GMAIL_CLIENT_SECRET` | OAuth client secret |
 | `GMAIL_REDIRECT_URI` | Redirect URI OAuth |
 
-### Vintern trên Modal (khuyến nghị)
+### VietOCR (OCR chính) + Ollama Qwen (phân loại) + Vintern Modal (tuỳ chọn)
 
-Fast Track hiện **không** dùng dữ liệu mock — ảnh hóa đơn được gửi qua Smart Track (Vintern → Gemini → OpenAI).
+**OCR mặc định:** [VietOCR](https://github.com/pbcquoc/vietocr) Fast Track (OpenCV detect dòng → nhận dạng → regex parse). Không dùng Qwen-VL cho OCR.
+
+```bash
+pip install -r backend/requirements.txt   # vietocr + torchvision
+# Lần đầu API chạy OCR sẽ tự tải weight vgg_seq2seq.pth
+```
+
+**Phân loại LLM (Ollama):**
+
+```bash
+ollama pull qwen3:8b
+ollama serve   # http://127.0.0.1:11434
+```
+
+#### Vintern trên Modal (fallback OCR tuỳ chọn)
 
 ```bash
 # 1. Cài Modal CLI (đã chạy modal setup)
@@ -183,7 +202,7 @@ Kiểm tra endpoint:
 curl https://<workspace>--tuchi-vintern-vinternserver-web.modal.run/health
 ```
 
-**Lưu ý:** `GEMINI_API_KEY` cần key hợp lệ từ [Google AI Studio](https://aistudio.google.com/apikey) (dạng `AIza...`). Key không hợp lệ hoặc hết quota sẽ fallback sang Vintern/OpenAI.
+**Lưu ý:** `GEMINI_API_KEY` / `OPENAI_API_KEY` chỉ dùng fallback nếu Ollama/Vintern không đủ. Key Gemini lấy từ [Google AI Studio](https://aistudio.google.com/apikey).
 
 ---
 
@@ -489,8 +508,8 @@ tuchi/
 | Mobile | Flutter, Riverpod, go_router, fl_chart, Drift (deps) |
 | Backend | FastAPI, SQLAlchemy async, Celery, Redis |
 | Database | PostgreSQL + pgvector (HNSW) |
-| OCR | Fast Track (regex/heuristic) → Vintern-1B → Gemini → OpenAI |
-| Classification | pgvector kNN + merchant graph + community signals + LLM taxonomy |
+| OCR | **VietOCR** Fast Track → optional Vintern/Gemini/OpenAI |
+| Classification | pgvector kNN + merchant graph + **Qwen3 (Ollama)** taxonomy |
 | Forecast | statsmodels Holt-Winters |
 | Push | Firebase Cloud Messaging |
 | Auth | JWT |
@@ -502,7 +521,16 @@ tuchi/
 Xem [`.env.example`](.env.example). Tóm tắt:
 
 ```bash
-# Phase 1
+# VietOCR (OCR)
+VIETOCR_ENABLED=true
+VIETOCR_MODEL=vgg_seq2seq
+
+# Local Ollama (classify LLM only)
+OLLAMA_ENABLED=true
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_LLM_MODEL=qwen3:8b
+
+# Cloud fallback OCR (optional)
 OPENAI_API_KEY=
 GEMINI_API_KEY=
 

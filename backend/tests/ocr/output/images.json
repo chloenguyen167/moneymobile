@@ -1,0 +1,22 @@
+{
+  "merchant": "WinMart+",
+  "items": [
+    {
+      "name": "MEAT DELI Ba rọi rút sườn (S)",
+      "price": 287900.0,
+      "qty": 0.42,
+      "line_total": 120918.0
+    },
+    {
+      "name": "MEAT DELI Nạc dăm đầu giòn",
+      "price": 301900.0,
+      "qty": 0.376,
+      "line_total": 113514.0
+    }
+  ],
+  "total_amount": 68097.0,
+  "transaction_date": null,
+  "ocr_track_used": "vintern",
+  "ocr_confidence": 0.84,
+  "raw_text": "```json\n{\n  \"merchant\": \"WinMart\",\n  \"Items\": [\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 346,\n      \"qty\": 0.346,\n      \"line_total\": 346\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 85.94,\n      \"qty\": 0.42,\n      \"line_total\": 85.94\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\": 1200,\n      \"qty\": 0.87,\n      \"line_total\": 1200\n    },\n    {\n      \"name\": \"Meat Deli\",\n      \"price\":\nWinMart Phieu tInh TieN Lysoa : 0ivEC i845inv 26030971 Asfno; 030352c1812 Mt Farr (4 Irlen Wnk Can SalTC 6054 M5e CELI JSi3! 102,00 'oicbel [3 8+ NEAT CkliTnt hec 148 {01 eaT Del JPkE} rhl 5lon1 451 207en1 120 716 veatoel1 s Qaudon 301 &10 Weaidelis aiyar Jsu Qo 381901 162 544\nTong TIln 42 Khe? Ten Cen Inarh'03n\n3 460\n468 Ua7 n\nSeT 4aeh\nFomaeh\nBe6 eJ0 OR Je ,Ugt hca Jonhrac [Y 5o yva hoadonYinniail itole 60 Fhù: ?in tu chai chL trach FheM nhau Ihan\nVobr\nPfsc\nWinMart phieu TInh TieN Lysoa ; IenuIinieysw 0902037! 1645t32602018i? CFn7o 030952o1a12 'Fanq (} Tatlen"
+}

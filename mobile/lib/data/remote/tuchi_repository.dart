@@ -44,6 +44,35 @@ class TuchiRepository {
         .toList();
   }
 
+  Future<TransactionModel> getTransaction(int id) async {
+    final resp = await _api.get('/transactions/$id');
+    if (resp.statusCode >= 400) throw Exception(_error(resp));
+    return TransactionModel.fromJson(
+      jsonDecode(resp.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<ProcessImageResult> processImage(
+    List<int> bytes, {
+    required String filename,
+    bool isLowQuality = false,
+  }) async {
+    final resp = await _api.multipart(
+      '/transactions/process-image',
+      fileBytes: bytes,
+      filename: filename,
+      fields: {
+        'is_low_quality': isLowQuality.toString(),
+        'auto_save': 'true',
+      },
+    );
+    final body = await resp.stream.bytesToString();
+    if (resp.statusCode >= 400) throw Exception(body);
+    return ProcessImageResult.fromJson(
+      jsonDecode(body) as Map<String, dynamic>,
+    );
+  }
+
   Future<ProcessReceiptResult> processReceipt(
     List<int> bytes, {
     required String filename,
@@ -96,17 +125,67 @@ class TuchiRepository {
     required double amount,
     String? merchantName,
     int? categoryId,
+    DateTime? transactionDate,
     String source = 'manual',
+    String transactionType = 'expense',
   }) async {
-    final body = <String, dynamic>{'amount': amount, 'source': source};
-    if (merchantName != null) body['merchant_name'] = merchantName;
+    final body = <String, dynamic>{
+      'amount': amount,
+      'source': source,
+      'transaction_type': transactionType,
+    };
+    if (merchantName != null && merchantName.isNotEmpty) {
+      body['merchant_name'] = merchantName;
+    }
     if (categoryId != null) body['category_id'] = categoryId;
+    if (transactionDate != null) {
+      body['transaction_date'] =
+          transactionDate.toIso8601String().split('T').first;
+    }
 
     final resp = await _api.post('/transactions', body: body);
     if (resp.statusCode >= 400) throw Exception(_error(resp));
     return TransactionModel.fromJson(
       jsonDecode(resp.body) as Map<String, dynamic>,
     );
+  }
+
+  Future<TransactionModel> updateTransaction({
+    required int id,
+    double? amount,
+    String? merchantName,
+    int? categoryId,
+    DateTime? transactionDate,
+    String? transactionType,
+  }) async {
+    final body = <String, dynamic>{};
+    if (amount != null) body['amount'] = amount;
+    if (merchantName != null) body['merchant_name'] = merchantName;
+    if (categoryId != null) body['category_id'] = categoryId;
+    if (transactionDate != null) {
+      body['transaction_date'] =
+          transactionDate.toIso8601String().split('T').first;
+    }
+    if (transactionType != null) body['transaction_type'] = transactionType;
+
+    final resp = await _api.patch('/transactions/$id', body: body);
+    if (resp.statusCode >= 400) throw Exception(_error(resp));
+    return TransactionModel.fromJson(
+      jsonDecode(resp.body) as Map<String, dynamic>,
+    );
+  }
+
+  /// Authenticated image bytes for a transaction (if any).
+  Future<List<int>?> getTransactionImage(int id) async {
+    final resp = await _api.get('/transactions/$id/image');
+    if (resp.statusCode == 404) return null;
+    if (resp.statusCode >= 400) throw Exception(_error(resp));
+    return resp.bodyBytes;
+  }
+
+  Future<void> deleteTransaction(int id) async {
+    final resp = await _api.delete('/transactions/$id');
+    if (resp.statusCode >= 400) throw Exception(_error(resp));
   }
 
   Future<List<CategoryModel>> getCategories() async {

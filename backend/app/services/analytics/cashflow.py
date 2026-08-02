@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Transaction, UserCashflowProfile
+from app.models import Transaction, TransactionType, UserCashflowProfile
 from app.schemas import CashflowForecastOut
 
 
@@ -54,9 +54,20 @@ async def compute_cashflow_forecast(
             Transaction.user_id == user_id,
             Transaction.transaction_date >= start,
             Transaction.transaction_date <= end,
+            Transaction.transaction_type == TransactionType.expense,
         )
     )
     spent_so_far = float(spent_result.scalar() or 0)
+
+    income_result = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), 0)).where(
+            Transaction.user_id == user_id,
+            Transaction.transaction_date >= start,
+            Transaction.transaction_date <= end,
+            Transaction.transaction_type == TransactionType.income,
+        )
+    )
+    income_so_far = float(income_result.scalar() or 0)
 
     days_elapsed = max(
         1,
@@ -65,8 +76,13 @@ async def compute_cashflow_forecast(
     days_remaining = max(last_day - days_elapsed, 0)
     daily_burn_rate = spent_so_far / days_elapsed if days_elapsed else 0.0
     forecast_end_of_month_spend = daily_burn_rate * last_day
-    remaining_balance = profile.starting_balance - spent_so_far
-    projected_end_balance = profile.starting_balance + (profile.monthly_income or 0.0) - forecast_end_of_month_spend
+    remaining_balance = profile.starting_balance + income_so_far - spent_so_far
+    projected_end_balance = (
+        profile.starting_balance
+        + (profile.monthly_income or 0.0)
+        + income_so_far
+        - forecast_end_of_month_spend
+    )
 
     depletion_date = None
     can_predict_depletion_date = False

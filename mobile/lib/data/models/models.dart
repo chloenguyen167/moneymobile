@@ -29,6 +29,9 @@ class TransactionModel {
     this.merchantName,
     this.categoryId,
     this.categoryName,
+    this.itemCategories = const [],
+    this.transactionType = 'expense',
+    this.hasImage = false,
     this.confidence,
     this.ocrTrackUsed,
     this.classificationReason,
@@ -41,12 +44,18 @@ class TransactionModel {
   final List<dynamic>? items;
   final int? categoryId;
   final String? categoryName;
+  final List<ItemCategoryModel> itemCategories;
+  final String transactionType;
+  final bool hasImage;
   final String source;
   final double? confidence;
   final String? ocrTrackUsed;
   final DateTime transactionDate;
   final DateTime createdAt;
   final String? classificationReason;
+
+  bool get isIncome => transactionType == 'income';
+  bool get hasItems => items != null && items!.isNotEmpty;
 
   factory TransactionModel.fromJson(Map<String, dynamic> json) =>
       TransactionModel(
@@ -56,12 +65,34 @@ class TransactionModel {
         items: json['items'] as List<dynamic>?,
         categoryId: json['category_id'] as int?,
         categoryName: json['category_name'] as String?,
+        itemCategories:
+            (json['item_categories'] as List?)
+                ?.map(
+                  (e) => ItemCategoryModel.fromJson(e as Map<String, dynamic>),
+                )
+                .toList() ??
+            const [],
+        transactionType: json['transaction_type'] as String? ?? 'expense',
+        hasImage: json['has_image'] as bool? ?? false,
         source: json['source'] as String,
         confidence: (json['confidence'] as num?)?.toDouble(),
         ocrTrackUsed: json['ocr_track_used'] as String?,
         transactionDate: DateTime.parse(json['transaction_date'] as String),
         createdAt: DateTime.parse(json['created_at'] as String),
         classificationReason: json['classification_reason'] as String?,
+      );
+}
+
+class ItemCategoryModel {
+  ItemCategoryModel({this.id, required this.name});
+
+  final int? id;
+  final String name;
+
+  factory ItemCategoryModel.fromJson(Map<String, dynamic> json) =>
+      ItemCategoryModel(
+        id: json['id'] as int?,
+        name: json['name'] as String,
       );
 }
 
@@ -248,6 +279,60 @@ class ProcessPaymentScreenshotResult {
         ),
         classification: json['classification'] as Map<String, dynamic>,
         transactionId: json['transaction_id'] as int?,
+      );
+}
+
+class ProcessImageResult {
+  ProcessImageResult({
+    required this.kind,
+    this.transactionId,
+    this.ocr,
+    this.extraction,
+    this.classification,
+  });
+
+  final String kind;
+  final int? transactionId;
+  final Map<String, dynamic>? ocr;
+  final PaymentScreenshotExtractModel? extraction;
+  final Map<String, dynamic>? classification;
+
+  double? get amount {
+    if (kind == 'payment_screenshot') return extraction?.totalAmount;
+    return (ocr?['total_amount'] as num?)?.toDouble();
+  }
+
+  String? get merchant {
+    if (kind == 'payment_screenshot') {
+      return extraction?.merchant ?? extraction?.paymentSource;
+    }
+    return ocr?['merchant']?.toString();
+  }
+
+  List<String> get categoryLabels {
+    final labels = <String>{};
+    final breakdown =
+        (classification?['category_breakdown'] as List<dynamic>?) ?? const [];
+    for (final entry in breakdown) {
+      final name = (entry as Map)['category_name']?.toString();
+      if (name != null && name.isNotEmpty) labels.add(name);
+    }
+    final primary = classification?['category_name']?.toString();
+    if (primary != null && primary.isNotEmpty) labels.add(primary);
+    return labels.toList();
+  }
+
+  factory ProcessImageResult.fromJson(Map<String, dynamic> json) =>
+      ProcessImageResult(
+        kind: json['kind'] as String? ?? 'receipt',
+        transactionId: json['transaction_id'] as int?,
+        ocr: json['ocr'] as Map<String, dynamic>?,
+        extraction: json['extraction'] != null
+            ? PaymentScreenshotExtractModel.fromJson(
+                json['extraction'] as Map<String, dynamic>,
+              )
+            : null,
+        classification: json['classification'] as Map<String, dynamic>?,
       );
 }
 

@@ -86,14 +86,16 @@ class ImageQualityResult {
 
 ImageQualityResult evaluateImageQuality(
   Uint8List bytes, {
-  double blurThreshold = 100,
+  // Bank/e-wallet screenshots have large flat UI regions → low Laplacian
+  // variance. Keep this soft; never block capture on blur alone.
+  double blurThreshold = 25,
 }) {
   final decoded = img.decodeImage(bytes);
   if (decoded == null) {
     return ImageQualityResult(
-      isLowQuality: true,
+      isLowQuality: false,
       blurScore: 0,
-      message: 'Không đọc được ảnh',
+      message: 'Không decode được ảnh — vẫn thử đọc',
     );
   }
 
@@ -120,9 +122,10 @@ ImageQualityResult evaluateImageQuality(
 
   if (variance < blurThreshold) {
     return ImageQualityResult(
+      // Soft flag only — backend still processes; do not nag user to retake
       isLowQuality: true,
       blurScore: variance,
-      message: 'Ảnh bị mờ — vui lòng chụp lại rõ hơn',
+      message: 'Ảnh hơi mờ — vẫn tiếp tục đọc',
     );
   }
   return ImageQualityResult(
@@ -132,12 +135,10 @@ ImageQualityResult evaluateImageQuality(
   );
 }
 
-String formatVnd(num amount) {
-  final s = amount.round().toString();
-  final buf = StringBuffer();
-  for (var i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
-    buf.write(s[i]);
-  }
-  return '${buf.toString()} đ';
+void invalidateTransactionRelated(WidgetRef ref) {
+  ref.invalidate(transactionsProvider);
+  ref.invalidate(budgetsProvider);
+  ref.invalidate(analyticsProvider);
+  ref.invalidate(cashflowInsightsProvider);
+  ref.invalidate(alertsProvider);
 }

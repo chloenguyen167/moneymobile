@@ -6,6 +6,8 @@ class LocalNotificationService {
   LocalNotificationService._();
   static final instance = LocalNotificationService._();
 
+  static const foregroundNotificationId = 9999;
+
   final _plugin = FlutterLocalNotificationsPlugin();
   bool _initialized = false;
   int _id = 0;
@@ -26,18 +28,35 @@ class LocalNotificationService {
     await _plugin.initialize(settings);
 
     if (Platform.isAndroid) {
-      const channel = AndroidNotificationChannel(
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      const budgetChannel = AndroidNotificationChannel(
         'tuchi_budget_alerts',
         'Cảnh báo ngân sách',
         description: 'Thông báo khi sắp vượt hoặc vượt ngân sách',
         importance: Importance.high,
       );
-      await _plugin
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(channel);
+      const foregroundChannel = AndroidNotificationChannel(
+        'tuchi_foreground',
+        'Theo dõi giao dịch',
+        description: 'Thông báo đang chạy khi bắt thông báo ngân hàng/ví',
+        importance: Importance.low,
+      );
+      await androidPlugin?.createNotificationChannel(budgetChannel);
+      await androidPlugin?.createNotificationChannel(foregroundChannel);
     }
 
     _initialized = true;
+  }
+
+  /// Android 13+ runtime permission for posting notifications.
+  Future<bool> requestPostNotificationsPermission() async {
+    if (!Platform.isAndroid) return true;
+    await init();
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final granted = await androidPlugin?.requestNotificationsPermission();
+    return granted ?? true;
   }
 
   Future<void> showBudgetAlert({
@@ -46,11 +65,15 @@ class LocalNotificationService {
     Map<String, dynamic>? payload,
   }) async {
     await init();
+    if (Platform.isAndroid) {
+      await requestPostNotificationsPermission();
+    }
     _id++;
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
         'tuchi_budget_alerts',
         'Cảnh báo ngân sách',
+        channelDescription: 'Thông báo khi sắp vượt hoặc vượt ngân sách',
         importance: Importance.high,
         priority: Priority.high,
         icon: '@mipmap/ic_launcher',
@@ -60,20 +83,33 @@ class LocalNotificationService {
     await _plugin.show(_id, title, body, details, payload: payload?.toString());
   }
 
-  /// Android only — foreground notification listener service.
+  /// Android only — ongoing notification while capture is active.
   Future<void> showForegroundService() async {
     if (!Platform.isAndroid) return;
     await init();
+    await requestPostNotificationsPermission();
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
         'tuchi_foreground',
         'Theo dõi giao dịch',
+        channelDescription: 'Thông báo đang chạy khi bắt thông báo ngân hàng/ví',
         importance: Importance.low,
         priority: Priority.low,
         ongoing: true,
         icon: '@mipmap/ic_launcher',
       ),
     );
-    await _plugin.show(9999, 'Tuchi', 'Đang theo dõi thông báo giao dịch...', details);
+    await _plugin.show(
+      foregroundNotificationId,
+      'Tuchi',
+      'Đang theo dõi thông báo giao dịch...',
+      details,
+    );
+  }
+
+  Future<void> cancelForegroundService() async {
+    if (!Platform.isAndroid) return;
+    await init();
+    await _plugin.cancel(foregroundNotificationId);
   }
 }

@@ -1,4 +1,7 @@
-"""Confidence-Routed Hybrid OCR (CR-OCR) pipeline."""
+"""Confidence-Routed Hybrid OCR (CR-OCR) pipeline.
+
+Primary path: VietOCR Fast Track. Smart Track (Vintern/Gemini/OpenAI) is optional fallback.
+"""
 
 from typing import Optional
 
@@ -8,14 +11,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models import MerchantReference
 from app.schemas import OcrResult
+from app.services.normalize import normalize_ocr_result
 from app.services.ocr.fast_track import _has_local_ocr_engine, run_fast_track
 from app.services.ocr.reference_correction import fuzzy_match_merchant
 from app.services.ocr.smart_track import run_smart_track
-from app.services.normalize import normalize_ocr_result
 
 
 def _vision_ocr_available() -> bool:
-    return bool(settings.vintern_api_url or settings.gemini_api_key or settings.openai_api_key)
+    """Cloud/self-host VLM fallback — Qwen-VL is no longer used for OCR."""
+    return bool(
+        settings.vintern_api_url
+        or settings.gemini_api_key
+        or settings.openai_api_key
+    )
+
 
 async def process_receipt(
     db: AsyncSession,
@@ -24,38 +33,55 @@ async def process_receipt(
     is_low_quality: bool = False,
     raw_text_hint: Optional[str] = None,
 ) -> OcrResult:
-    # Step 2: Fast Track (local VietOCR) — skip shortcut when only vision APIs are available
+    # VietOCR raw text → LLM JSON (inside fast_track). No regex before LLM.
     fast_result = await run_fast_track(image_bytes, raw_text_hint)
 
     amount_found = fast_result.total_amount is not None
     date_found = fast_result.transaction_date is not None
     avg_conf = fast_result.ocr_confidence
     has_text_hint = bool(raw_text_hint)
+    has_local = _has_local_ocr_engine()
+    has_raw = bool((fast_result.raw_text or "").strip())
 
-    # Step 3: Routing
-    if (
+    # Soften low-quality routing: still try local/LLM first; cloud only as backup
+    local_ok = (
+        has_local
+        and avg_conf >= settings.ocr_fast_confidence_threshold
+        and amount_found
+    )
+    hint_ok = (
         has_text_hint
         and avg_conf >= settings.ocr_fast_confidence_threshold
         and amount_found
         and date_found
-        and not is_low_quality
-    ):
-        result = fast_result
-    elif not has_text_hint and _vision_ocr_available() and not _has_local_ocr_engine():
-        # No on-box OCR — always use Vintern/Gemini/OpenAI for image input
-        result = await run_smart_track(image_bytes, None, end_to_end=True)
-    elif avg_conf >= settings.ocr_smart_confidence_threshold:
-        result = await run_smart_track(image_bytes, fast_result.raw_text or None, end_to_end=False)
-    else:
-        result = await run_smart_track(image_bytes, None, end_to_end=True)
+    )
+    llm_structured = fast_result.ocr_track_used == "fast_llm"
 
-    # Step 5: Normalize OCR items before downstream classification/storage
+    if local_ok or hint_ok or llm_structured:
+        result = fast_result
+    elif has_raw and avg_conf >= settings.ocr_smart_confidence_threshold:
+        if _vision_ocr_available():
+            result = await run_smart_track(
+                image_bytes, fast_result.raw_text or None, end_to_end=False
+            )
+        else:
+            result = fast_result
+    elif _vision_ocr_available() and not has_local:
+        result = await run_smart_track(image_bytes, None, end_to_end=True)
+    elif _vision_ocr_available() and is_low_quality and not amount_found:
+        result = await run_smart_track(
+            image_bytes, fast_result.raw_text or None, end_to_end=False
+        )
+    else:
+        result = fast_result
+    # Light normalize for LLM JSON (keep LLM names). Heavy keyword rewrite only for regex path.
     result = normalize_ocr_result(result)
 
-    # Step 6: Post-OCR reference correction
+    # Optional fuzzy merchant match against user/global references (not receipt regex)
     result = await _apply_reference_correction(db, user_id, result)
 
     from app.services.metrics.pipeline import record_ocr_track
+
     await record_ocr_track(db, result.ocr_track_used)
 
     return result

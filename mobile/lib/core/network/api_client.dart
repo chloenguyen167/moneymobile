@@ -71,6 +71,7 @@ class ApiClient {
     required List<int> fileBytes,
     required String filename,
     Map<String, String> fields = const {},
+    Duration timeout = const Duration(minutes: 10),
   }) async {
     final uri = Uri.parse('${AppConfig.apiBaseUrl}$path');
     final request = http.MultipartRequest('POST', uri);
@@ -78,6 +79,15 @@ class ApiClient {
     if (t != null) request.headers['Authorization'] = 'Bearer $t';
     request.fields.addAll(fields);
     request.files.add(http.MultipartFile.fromBytes('file', fileBytes, filename: filename));
-    return request.send();
+    final client = http.Client();
+    try {
+      return await client.send(request).timeout(timeout);
+    } on Exception catch (e) {
+      throw Exception(
+        'Không gửi được ảnh lên backend (${AppConfig.apiBaseUrl}$path): $e',
+      );
+    } finally {
+      client.close();
+    }
   }
 }

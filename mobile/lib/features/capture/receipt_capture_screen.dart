@@ -2,10 +2,13 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/format.dart';
+import '../../core/utils/image_compress.dart';
 
 class ReceiptCaptureScreen extends ConsumerStatefulWidget {
   const ReceiptCaptureScreen({super.key});
@@ -21,25 +24,55 @@ class _ReceiptCaptureScreenState extends ConsumerState<ReceiptCaptureScreen> {
   ImageQualityResult? _quality;
   Map<String, dynamic>? _ocrResult;
   Map<String, dynamic>? _classification;
+  int? _transactionId;
   bool _processing = false;
+  bool _picking = false;
   String? _error;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openCamera());
+  }
+
+  Future<void> _openCamera() => _pickImage(ImageSource.camera);
+
+  Future<void> _openGallery() => _pickImage(ImageSource.gallery);
+
   Future<void> _pickImage(ImageSource source) async {
-    final picker = ImagePicker();
-    final file = await picker.pickImage(source: source, imageQuality: 85);
-    if (file == null) return;
+    if (_picking || _processing) return;
+    setState(() => _picking = true);
+    try {
+      final picker = ImagePicker();
+      // Full frame — no crop. Quality hint; we re-compress to 70% after.
+      final file = await picker.pickImage(
+        source: source,
+        imageQuality: 100,
+        maxWidth: null,
+        maxHeight: null,
+      );
+      if (file == null) return;
 
-    final bytes = await file.readAsBytes();
-    final quality = evaluateImageQuality(bytes);
+      final raw = await file.readAsBytes();
+      final bytes = compressImageBytes(Uint8List.fromList(raw), quality: 70);
+      final quality = evaluateImageQuality(bytes);
 
-    setState(() {
-      _imageBytes = bytes;
-      _filename = file.name;
-      _quality = quality;
-      _ocrResult = null;
-      _classification = null;
-      _error = null;
-    });
+      if (!mounted) return;
+      setState(() {
+        _imageBytes = bytes;
+        _filename = file.name.endsWith('.jpg') || file.name.endsWith('.jpeg')
+            ? file.name
+            : '${file.name.split('.').first}.jpg';
+        _quality = quality;
+        _ocrResult = null;
+        _classification = null;
+        _transactionId = null;
+        _error = null;
+      });
+      await _processReceipt();
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
   }
 
   Future<void> _processReceipt() async {
@@ -51,229 +84,290 @@ class _ReceiptCaptureScreenState extends ConsumerState<ReceiptCaptureScreen> {
     });
 
     try {
-      final result = await ref
-          .read(repositoryProvider)
-          .processReceipt(
+      final result = await ref.read(repositoryProvider).processReceipt(
             _imageBytes!,
             filename: _filename!,
             isLowQuality: _quality?.isLowQuality ?? false,
           );
-      ref.invalidate(transactionsProvider);
+      invalidateTransactionRelated(ref);
+      if (!mounted) return;
       setState(() {
         _ocrResult = result.ocr;
         _classification = result.classification;
+        _transactionId = result.transactionId;
       });
-    } catch (e) {
-      setState(() => _error = e.toString());
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Không đọc được hóa đơn. Thử chọn ảnh khác.');
+      }
     } finally {
-      setState(() => _processing = false);
+      if (mounted) setState(() => _processing = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Chụp hóa đơn')),
-      body: SingleChildScrollView(
+      appBar: AppBar(
+        title: const Text('Chụp hóa đơn'),
+        actions: [
+          IconButton(
+            tooltip: 'Chọn từ thư viện',
+            onPressed: _picking || _processing ? null : _openGallery,
+            icon: const Icon(Icons.photo_library_outlined),
+          ),
+          IconButton(
+            tooltip: 'Chụp lại',
+            onPressed: _picking || _processing ? null : _openCamera,
+            icon: const Icon(Icons.camera_alt_outlined),
+          ),
+        ],
+      ),
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'OCR hóa đơn',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Dùng cho hóa đơn mua hàng có nhiều sản phẩm. Luồng này giữ nguyên pipeline OCR receipt hiện tại.',
-              style: TextStyle(color: AppColors.onSurfaceMuted),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pickImage(ImageSource.camera),
-                    icon: const Icon(Icons.camera_alt),
-                    label: const Text('Camera'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pickImage(ImageSource.gallery),
-                    icon: const Icon(Icons.photo_library),
-                    label: const Text('Thư viện'),
-                  ),
-                ),
-              ],
-            ),
-            if (_imageBytes != null) ...[
-              const SizedBox(height: 16),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.memory(
-                  _imageBytes!,
-                  height: 200,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
+        children: [
+          if (_picking && _imageBytes == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_imageBytes == null)
+            _EmptyCapture(onCamera: _openCamera, onGallery: _openGallery)
+          else ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.memory(
+                _imageBytes!,
+                height: 240,
+                width: double.infinity,
+                fit: BoxFit.contain,
               ),
-            ],
-            if (_quality != null) ...[
+            ),
+            if (_quality != null && _quality!.isLowQuality) ...[
               const SizedBox(height: 12),
               Card(
-                color: _quality!.isLowQuality
-                    ? AppColors.primary.withValues(alpha: 0.15)
-                    : AppColors.secondary.withValues(alpha: 0.1),
-                child: ListTile(
+                color: AppColors.primary.withValues(alpha: 0.18),
+                child: const ListTile(
                   leading: Icon(
-                    _quality!.isLowQuality ? Icons.warning : Icons.check_circle,
-                    color: _quality!.isLowQuality
-                        ? AppColors.warning
-                        : AppColors.success,
+                    Icons.warning_amber_rounded,
+                    color: AppColors.warning,
                   ),
-                  title: Text(_quality!.message),
-                  subtitle: Text(
-                    'Blur score: ${_quality!.blurScore.toStringAsFixed(1)}',
-                  ),
+                  title: Text('Ảnh hơi mờ'),
+                  subtitle: Text('Vẫn tiếp tục đọc bình thường.'),
                 ),
               ),
             ],
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _imageBytes == null || _processing
-                  ? null
-                  : _processReceipt,
-              icon: _processing
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.document_scanner),
-              label: Text(
-                _processing ? 'Đang xử lý OCR...' : 'Gửi OCR hóa đơn',
+            if (_processing) ...[
+              const SizedBox(height: 24),
+              const Center(child: CircularProgressIndicator()),
+              const SizedBox(height: 12),
+              const Text(
+                'Đang đọc hóa đơn...',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.onSurfaceMuted),
               ),
-            ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              Text(_error!, style: const TextStyle(color: AppColors.error)),
+              const SizedBox(height: 8),
+              FilledButton(
+                onPressed: _processReceipt,
+                child: const Text('Thử lại'),
               ),
             ],
-            if (_ocrResult != null) ...[
+            if (_ocrResult != null && !_processing) ...[
               const SizedBox(height: 24),
-              Text(
-                'Kết quả OCR',
-                style: Theme.of(context).textTheme.titleMedium,
+              _SuccessCard(
+                ocr: _ocrResult!,
+                classification: _classification,
+                transactionId: _transactionId,
+                onView: _transactionId == null
+                    ? null
+                    : () => context.push('/transactions/$_transactionId'),
+                onDone: () => context.go('/'),
+                onRetake: _openCamera,
               ),
-              const SizedBox(height: 8),
-              _ResultCard(data: _ocrResult!),
-            ],
-            if (_classification != null) ...[
-              const SizedBox(height: 16),
-              Text('Phân loại', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              _ClassificationCard(data: _classification!),
             ],
           ],
-        ),
+        ],
       ),
     );
   }
 }
 
-class _ResultCard extends StatelessWidget {
-  const _ResultCard({required this.data});
+class _EmptyCapture extends StatelessWidget {
+  const _EmptyCapture({required this.onCamera, required this.onGallery});
 
-  final Map<String, dynamic> data;
+  final VoidCallback onCamera;
+  final VoidCallback onGallery;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: data.entries.map((e) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text('${e.key}: ${e.value}'),
-            );
-          }).toList(),
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.document_scanner_outlined,
+            size: 64,
+            color: AppColors.secondary,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Đưa camera vào hóa đơn để quét',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Hoặc chọn ảnh có sẵn từ thư viện.',
+            style: TextStyle(color: AppColors.onSurfaceMuted),
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: onCamera,
+            icon: const Icon(Icons.camera_alt_rounded),
+            label: const Text('Mở camera'),
+          ),
+          TextButton.icon(
+            onPressed: onGallery,
+            icon: const Icon(Icons.photo_library_outlined),
+            label: const Text('Thư viện ảnh'),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _ClassificationCard extends StatelessWidget {
-  const _ClassificationCard({required this.data});
+class _SuccessCard extends StatelessWidget {
+  const _SuccessCard({
+    required this.ocr,
+    required this.classification,
+    required this.transactionId,
+    this.onView,
+    required this.onDone,
+    required this.onRetake,
+  });
 
-  final Map<String, dynamic> data;
+  final Map<String, dynamic> ocr;
+  final Map<String, dynamic>? classification;
+  final int? transactionId;
+  final VoidCallback? onView;
+  final VoidCallback onDone;
+  final VoidCallback onRetake;
 
   @override
   Widget build(BuildContext context) {
+    final merchant = ocr['merchant']?.toString();
+    final amount = (ocr['total_amount'] as num?)?.toDouble();
     final breakdown =
-        (data['category_breakdown'] as List<dynamic>?) ?? const [];
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (breakdown.isNotEmpty) ...[
-              Text(
-                'Tổng hợp theo nhóm',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+        (classification?['category_breakdown'] as List<dynamic>?) ?? const [];
+    final uniqueCats = <String>{};
+    for (final entry in breakdown) {
+      final name = (entry as Map)['category_name']?.toString();
+      if (name != null && name.isNotEmpty) uniqueCats.add(name);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                transactionId != null
+                    ? Icons.check_circle_rounded
+                    : Icons.info_outline_rounded,
+                color: transactionId != null
+                    ? AppColors.success
+                    : AppColors.warning,
               ),
-              const SizedBox(height: 12),
-              ...breakdown.map((entry) {
-                final row = entry as Map<String, dynamic>;
-                final amount = (row['total_amount'] as num?)?.toDouble() ?? 0;
-                final itemCount = row['item_count'] as int? ?? 0;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          row['category_name']?.toString() ?? 'Khác',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      Text(
-                        '${amount.toStringAsFixed(0)} đ',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        '$itemCount món',
-                        style: const TextStyle(color: AppColors.onSurfaceMuted),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-              const Divider(height: 24),
+              const SizedBox(width: 8),
+              Text(
+                transactionId != null ? 'Đã lưu giao dịch' : 'Đã đọc hóa đơn',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
             ],
-            ...data.entries.where((e) => e.key != 'category_breakdown').map((
-              e,
-            ) {
+          ),
+          const SizedBox(height: 16),
+          if (amount != null)
+            Text(
+              formatVnd(amount),
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                color: AppColors.secondary,
+              ),
+            ),
+          if (merchant != null && merchant.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(merchant, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ],
+          if (uniqueCats.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: uniqueCats
+                  .map(
+                    (c) => Chip(
+                      label: Text(c, style: const TextStyle(fontSize: 12)),
+                      visualDensity: VisualDensity.compact,
+                      backgroundColor:
+                          AppColors.secondary.withValues(alpha: 0.1),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+          if (breakdown.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            const Text('Theo nhóm', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            ...breakdown.map((entry) {
+              final row = entry as Map<String, dynamic>;
+              final amt = (row['total_amount'] as num?)?.toDouble() ?? 0;
+              final count = row['item_count'] as int? ?? 0;
               return Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text('${e.key}: ${e.value}'),
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(row['category_name']?.toString() ?? 'Khác'),
+                    ),
+                    Text(
+                      formatVnd(amt),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$count món',
+                      style: const TextStyle(
+                        color: AppColors.onSurfaceMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
               );
             }),
           ],
-        ),
+          const SizedBox(height: 16),
+          if (onView != null)
+            FilledButton(
+              onPressed: onView,
+              child: const Text('Xem giao dịch'),
+            ),
+          TextButton(onPressed: onDone, child: const Text('Về danh sách')),
+          TextButton(onPressed: onRetake, child: const Text('Chụp hóa đơn khác')),
+        ],
       ),
     );
   }

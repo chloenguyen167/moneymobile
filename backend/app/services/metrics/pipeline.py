@@ -12,7 +12,7 @@ from app.models import PipelineMetricDaily, Transaction
 logger = logging.getLogger(__name__)
 
 # Tracks that incur GPU/API cost
-EXPENSIVE_OCR_TRACKS = {"vintern", "gemini", "openai", "smart"}
+EXPENSIVE_OCR_TRACKS = {"qwen_vl", "payment_qwen_vl", "vintern", "gemini", "openai", "smart"}
 EXPENSIVE_CLASSIFY_TRACKS = {"llm", "llm_taxonomy", "smart"}
 
 
@@ -34,19 +34,17 @@ async def _increment(db: AsyncSession, ocr_track: str | None = None, classify_tr
         await db.flush()
 
     if ocr_track:
-        field = f"ocr_{ocr_track}" if ocr_track not in ("fast",) else "ocr_fast"
-        if ocr_track in ("smart",):
-            field = "ocr_smart"
-        elif ocr_track == "vintern":
+        # Map self-hosted VLMs to ocr_vintern counter (no DB migration)
+        if ocr_track in ("qwen_vl", "payment_qwen_vl", "vintern"):
             field = "ocr_vintern"
-        elif ocr_track == "gemini":
+        elif ocr_track == "gemini" or ocr_track == "payment_gemini":
             field = "ocr_gemini"
-        elif ocr_track == "openai":
+        elif ocr_track == "openai" or ocr_track == "payment_openai":
             field = "ocr_openai"
-        elif ocr_track != "fast":
-            field = "ocr_smart"
-        else:
+        elif ocr_track == "fast":
             field = "ocr_fast"
+        else:
+            field = "ocr_smart"
         current = getattr(metric, field, 0) or 0
         setattr(metric, field, current + 1)
         metric.ocr_total = (metric.ocr_total or 0) + 1

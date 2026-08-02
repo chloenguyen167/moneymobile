@@ -204,6 +204,13 @@ Trả JSON đúng dạng:
 
 
 async def _call_llm(prompt: str) -> dict | None:
+    from app.services.llm.ollama_client import chat_json, ollama_available
+
+    if ollama_available():
+        data = await chat_json(prompt)
+        if data:
+            return data
+
     if settings.openai_api_key:
         try:
             async with httpx.AsyncClient(timeout=30) as client:

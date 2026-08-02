@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/format.dart';
 import '../../data/models/models.dart';
 
 class BudgetScreen extends ConsumerStatefulWidget {
@@ -20,7 +21,13 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
 
     return budgetsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Lỗi: $e')),
+      error: (_, _) => const Center(
+        child: Text(
+          'Không tải được ngân sách.\nKéo xuống để thử lại.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.onSurfaceMuted),
+        ),
+      ),
       data: (budgets) {
         return RefreshIndicator(
           onRefresh: () async {
@@ -30,14 +37,14 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text(
+              const Text(
                 'Ngân sách tháng',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Theo dõi chi tiêu theo category — cảnh báo 80%/100%/120%',
-                style: const TextStyle(color: AppColors.onSurfaceMuted),
+              const SizedBox(height: 6),
+              const Text(
+                'Đặt hạn mức theo danh mục — app sẽ nhắc khi gần hết.',
+                style: TextStyle(color: AppColors.onSurfaceMuted, height: 1.4),
               ),
               const SizedBox(height: 16),
               if (budgets.isEmpty)
@@ -46,14 +53,31 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                     padding: const EdgeInsets.all(24),
                     child: Column(
                       children: [
-                        const Text('Chưa có budget nào'),
+                        const Icon(
+                          Icons.account_balance_wallet_outlined,
+                          size: 40,
+                          color: AppColors.secondary,
+                        ),
                         const SizedBox(height: 12),
+                        const Text(
+                          'Chưa có hạn mức nào',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Ví dụ: Ăn uống 3.000.000 đ / tháng',
+                          style: TextStyle(color: AppColors.onSurfaceMuted),
+                        ),
+                        const SizedBox(height: 16),
                         FilledButton.icon(
                           onPressed: categoriesAsync.valueOrNull == null
                               ? null
-                              : () => _showAddBudget(context, categoriesAsync.value!),
+                              : () => _showAddBudget(
+                                    context,
+                                    categoriesAsync.value!,
+                                  ),
                           icon: const Icon(Icons.add),
-                          label: const Text('Thêm budget'),
+                          label: const Text('Thêm hạn mức'),
                         ),
                       ],
                     ),
@@ -67,7 +91,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                       ? null
                       : () => _showAddBudget(context, categoriesAsync.value!),
                   icon: const Icon(Icons.add),
-                  label: const Text('Thêm budget'),
+                  label: const Text('Thêm hạn mức'),
                 ),
               ],
             ],
@@ -77,22 +101,27 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     );
   }
 
-  Future<void> _showAddBudget(BuildContext context, List<CategoryModel> categories) async {
+  Future<void> _showAddBudget(
+    BuildContext context,
+    List<CategoryModel> categories,
+  ) async {
     int? selectedCat = categories.isNotEmpty ? categories.first.id : null;
     final amountCtrl = TextEditingController(text: '1000000');
 
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Thêm budget'),
+        title: const Text('Thêm hạn mức'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             DropdownButtonFormField<int>(
               value: selectedCat,
-              decoration: const InputDecoration(labelText: 'Category'),
+              decoration: const InputDecoration(labelText: 'Danh mục'),
               items: categories
-                  .map<DropdownMenuItem<int>>((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                  .map(
+                    (c) => DropdownMenuItem(value: c.id, child: Text(c.name)),
+                  )
                   .toList(),
               onChanged: (v) => selectedCat = v,
             ),
@@ -100,18 +129,25 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
             TextField(
               controller: amountCtrl,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Hạn mức (VND)'),
+              decoration: const InputDecoration(
+                labelText: 'Hạn mức',
+                suffixText: 'đ',
+              ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Hủy')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Hủy'),
+          ),
           FilledButton(
             onPressed: () async {
               if (selectedCat == null) return;
               await ref.read(repositoryProvider).createBudget(
                     categoryId: selectedCat!,
-                    limitAmount: double.tryParse(amountCtrl.text.replaceAll('.', '')) ?? 0,
+                    limitAmount:
+                        parseVndInput(amountCtrl.text) ?? 0,
                   );
               ref.invalidate(budgetsProvider);
               if (ctx.mounted) Navigator.pop(ctx);
@@ -133,10 +169,13 @@ class _BudgetCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final pct = budget.percentUsed.clamp(0, 150);
     Color barColor = AppColors.secondary;
+    String status = 'Còn dư';
     if (pct >= 100) {
       barColor = AppColors.error;
+      status = 'Vượt hạn mức';
     } else if (pct >= 80) {
       barColor = AppColors.warning;
+      status = 'Sắp hết';
     }
 
     return Card(
@@ -147,26 +186,40 @@ class _BudgetCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(budget.categoryName ?? 'Category', style: const TextStyle(fontWeight: FontWeight.w600)),
-                Text('${pct.toStringAsFixed(0)}%'),
+                Expanded(
+                  child: Text(
+                    budget.categoryName ?? 'Danh mục',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Text(
+                  status,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: barColor,
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(6),
               child: LinearProgressIndicator(
                 value: (pct / 100).clamp(0, 1),
-                minHeight: 8,
+                minHeight: 10,
                 backgroundColor: AppColors.border,
                 color: barColor,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(
               '${formatVnd(budget.spent)} / ${formatVnd(budget.limitAmount)}',
-              style: const TextStyle(color: AppColors.onSurfaceMuted, fontSize: 13),
+              style: const TextStyle(
+                color: AppColors.onSurfaceMuted,
+                fontSize: 13,
+              ),
             ),
           ],
         ),

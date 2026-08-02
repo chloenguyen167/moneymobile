@@ -32,8 +32,11 @@ class _TuchiAppState extends ConsumerState<TuchiApp> {
 
   Future<void> _initPhase2Services() async {
     if (Platform.isAndroid) {
+      await LocalNotificationService.instance.requestPostNotificationsPermission();
       final capture = ref.read(notificationCaptureProvider);
-      if (await capture.isPermissionGranted()) {
+      final granted = await capture.isPermissionGranted();
+      final enabled = await capture.isEnabled();
+      if (granted && enabled) {
         await capture.start();
       }
     }

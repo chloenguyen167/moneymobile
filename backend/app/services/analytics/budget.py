@@ -6,7 +6,7 @@ from datetime import date, datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Alert, Budget, BudgetAlertSent, Category, Transaction, UserDevice
+from app.models import Alert, Budget, BudgetAlertSent, Category, Transaction, TransactionType, UserDevice
 from app.schemas import AnalyticsSummary
 from app.services.push.fcm import send_push_to_tokens
 
@@ -31,6 +31,7 @@ async def get_analytics_summary(db: AsyncSession, user_id: int, month: date | No
             Transaction.user_id == user_id,
             Transaction.transaction_date >= start,
             Transaction.transaction_date <= end,
+            Transaction.transaction_type == TransactionType.expense,
         )
     )
     total_spent = float(spent_result.scalar() or 0)
@@ -42,6 +43,7 @@ async def get_analytics_summary(db: AsyncSession, user_id: int, month: date | No
             Transaction.user_id == user_id,
             Transaction.transaction_date >= start,
             Transaction.transaction_date <= end,
+            Transaction.transaction_type == TransactionType.expense,
         )
         .group_by(Category.name)
         .order_by(func.sum(Transaction.amount).desc())
@@ -54,6 +56,7 @@ async def get_analytics_summary(db: AsyncSession, user_id: int, month: date | No
             Transaction.user_id == user_id,
             Transaction.transaction_date >= start,
             Transaction.transaction_date <= end,
+            Transaction.transaction_type == TransactionType.expense,
         )
         .group_by(Transaction.transaction_date)
         .order_by(Transaction.transaction_date)
@@ -88,6 +91,7 @@ async def check_budget_alerts(db: AsyncSession, user_id: int) -> list[Alert]:
                 Transaction.user_id == user_id,
                 Transaction.category_id == budget.category_id,
                 Transaction.transaction_date >= start,
+                Transaction.transaction_type == TransactionType.expense,
             )
         )
         spent = float(spent_result.scalar() or 0)
@@ -172,6 +176,7 @@ async def get_budget_status(db: AsyncSession, user_id: int) -> list[dict]:
                 Transaction.user_id == user_id,
                 Transaction.category_id == budget.category_id,
                 Transaction.transaction_date >= start,
+                Transaction.transaction_type == TransactionType.expense,
             )
         )
         spent = float(spent_result.scalar() or 0)

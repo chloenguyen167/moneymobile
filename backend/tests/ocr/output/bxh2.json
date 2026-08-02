@@ -1,0 +1,52 @@
+{
+  "merchant": "Bách Hóa Xanh",
+  "items": [
+    {
+      "name": "XA LACH LOLO XANH(KG)",
+      "price": 35000.0,
+      "qty": 0.132,
+      "line_total": 4620.0
+    },
+    {
+      "name": "cAi NGQT (KG)",
+      "price": 35000.0,
+      "qty": 0.39,
+      "line_total": 13650.0
+    },
+    {
+      "name": "T HlỂM",
+      "price": 76000.0,
+      "qty": 0.034,
+      "line_total": 2584.0
+    },
+    {
+      "name": "CA CHUA (KG)",
+      "price": 35000.0,
+      "qty": 0.408,
+      "line_total": 14280.0
+    },
+    {
+      "name": "củ Cal TRANG",
+      "price": 22000.0,
+      "qty": 0.242,
+      "line_total": 5324.0
+    },
+    {
+      "name": "BẢP CAI THA@ (KG)",
+      "price": 30000.0,
+      "qty": 0.446,
+      "line_total": 13380.0
+    },
+    {
+      "name": "Bl XANH",
+      "price": 55000.0,
+      "qty": 0.658,
+      "line_total": 36190.0
+    }
+  ],
+  "total_amount": 90000.0,
+  "transaction_date": "2021-07-11",
+  "ocr_track_used": "vintern",
+  "ocr_confidence": 0.99,
+  "raw_text": "...\nBacH HÓa XANH www bachhoaxanh com stamu muèng 50 6, Thù Khu 2, Phưun@ BInh Th?; Đửc , '%h9n3 Phuunga} Mlnh. PhiÉu THANH TOAN S8 CT; 21071043610241795 \"gby CT 11/07/2021 11.58 Whon vlen: Cao Tlh] Huyên Trang SL Glé bán Ttijn XA LACH LOLO XANH(KG) 0.132 35 000 4,620 cAi NGQT (KG) 0.39 18,650 35,00o @T HlỂM 0,034 2,584 76,000 CA CHUA (KG) 0,408 35@00 14,280 củ Cal TRANG 0.242 22,000 5,324 BẢP CAI THA@ (KG) 0.446 30,000 13,380 Bl XANH 0,658 55,000 36,190 Tong tièn: 90,028 Thanh toán: 90,000 (Đw làm tròn) Tlen mặt: 100,000 Tlén thơl lal: 10,000 (Glá trên đ bao gầm thuẽ GTGT}\nTỡng @àl góp Ýlkhlếu nạl.l8oo 1067 Luu ý; Bch Hóa Xanh chl xuãt hóa đon itrong ngày Quý khách vulilong Ilên hệ thu ngân c dừợc hó trợ Quý khách có thể In ban são hóa đơh VAT tal trang web https:llhddt bachhoaxanh com . Quý khách vul lòng xem chl tlết ChÍnh sách đổl-trả hàng duqc nlem yết tai của hàng BHX XIn cảm an quý khach. Hẹn gặP IạỈI"
+}

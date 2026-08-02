@@ -208,6 +208,20 @@ def normalize_receipt_item(item: ReceiptItem) -> ReceiptItem:
 
 
 def normalize_ocr_result(result: OcrResult) -> OcrResult:
+    # LLM already structured items from raw OCR — do not rewrite/filter with keyword rules
+    if result.ocr_track_used == "fast_llm":
+        preserved = [
+            item.model_copy(
+                update={
+                    "raw_name": item.raw_name or item.name,
+                    "normalized_name": item.normalized_name or item.name,
+                    "canonical_name": item.canonical_name or item.name,
+                }
+            )
+            for item in result.items
+        ]
+        return result.model_copy(update={"items": preserved})
+
     normalized_items = [normalize_receipt_item(item) for item in result.items]
     filtered_items = [
         item

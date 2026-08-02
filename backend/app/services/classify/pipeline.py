@@ -23,7 +23,21 @@ DEFAULT_CATEGORIES = [
     ("Sức khỏe", "health_and_safety"),
     ("Giáo dục", "school"),
     ("Khác", "category"),
+    # Income
+    ("Lương", "payments"),
+    ("Thưởng", "card_giftcard"),
+    ("Hoàn tiền", "replay"),
+    ("Chuyển khoản đến", "call_received"),
+    ("Thu khác", "south_west"),
 ]
+
+INCOME_CATEGORY_NAMES = {
+    "Lương",
+    "Thưởng",
+    "Hoàn tiền",
+    "Chuyển khoản đến",
+    "Thu khác",
+}
 
 
 async def seed_default_categories(db: AsyncSession) -> None:
@@ -43,6 +57,15 @@ async def classify_transaction(
     amount: float | None = None,
     transaction_date: date | None = None,
 ) -> ClassificationResult:
+    """Classify expense categories from structured OCR JSON.
+
+    Order:
+      1. Per-item: LLM (preferred) / keyword fallback → aggregate
+      2. Personal merchant embedding lookup
+      3. kNN on past transaction embeddings
+      4. Global merchant graph
+      5. Whole-receipt LLM taxonomy
+    """
     from app.services.metrics.pipeline import record_classify_track
 
     async def _finish(result: ClassificationResult) -> ClassificationResult:
@@ -222,8 +245,9 @@ def _score_item_category(text_blob: str, tokens: set[str], keywords: list[str]) 
 
 async def _smart_classify(db: AsyncSession, user_id: int, ocr: OcrResult, amount: float) -> ClassificationResult:
     from app.services.classify.taxonomy import llm_classify_with_taxonomy
+    from app.services.llm.ollama_client import ollama_available
 
-    if settings.openai_api_key or settings.gemini_api_key:
+    if ollama_available() or settings.openai_api_key or settings.gemini_api_key:
         llm_result = await llm_classify_with_taxonomy(db, user_id, ocr, amount)
         if llm_result:
             return llm_result
@@ -254,15 +278,69 @@ async def _smart_classify(db: AsyncSession, user_id: int, ocr: OcrResult, amount
 
 
 async def classify_receipt_items(db: AsyncSession, user_id: int, ocr: OcrResult) -> list[ReceiptItem]:
+    """Assign category per line item: LLM first when available, keyword rules only as fallback."""
     from app.services.classify.taxonomy import llm_classify_receipt_items
+    from app.services.llm.ollama_client import ollama_available
 
     await seed_default_categories(db)
     categories_result = await db.execute(select(Category).where(Category.user_id.is_(None)))
     categories = {c.name: c for c in categories_result.scalars().all()}
-    classified: list[ReceiptItem] = []
 
+    # Seed placeholders
+    classified: list[ReceiptItem] = [
+        ReceiptItem(
+            name=item.name,
+            price=item.price,
+            qty=item.qty,
+            unit_price=item.unit_price,
+            raw_name=item.raw_name,
+            normalized_name=item.normalized_name,
+            canonical_name=item.canonical_name,
+            brand=item.brand,
+            size_value=item.size_value,
+            size_unit=item.size_unit,
+            removed_tokens=item.removed_tokens,
+            category_id=None,
+            category_name=None,
+            classification_confidence=None,
+            classification_reason=None,
+        )
+        for item in ocr.items
+    ]
+
+    llm_ok = ollama_available() or bool(settings.openai_api_key or settings.gemini_api_key)
+    if llm_ok and classified:
+        batch_size = max(1, settings.classify_item_llm_max_items)
+        for start in range(0, len(classified), batch_size):
+            batch = classified[start : start + batch_size]
+            llm_result = await llm_classify_receipt_items(
+                db,
+                user_id,
+                ocr.merchant,
+                batch,
+            )
+            for local_index, item in enumerate(batch):
+                payload = llm_result.get(local_index)
+                if not payload:
+                    continue
+                category = categories.get(payload["category"])
+                if not category:
+                    continue
+                classified[start + local_index] = item.model_copy(
+                    update={
+                        "category_id": category.id,
+                        "category_name": category.name,
+                        "classification_confidence": float(payload.get("confidence") or 0.8),
+                        "classification_reason": payload.get("reason") or "LLM phân loại",
+                    }
+                )
+
+    # Keyword fallback only for items LLM did not cover
     merchant_norm = normalize_vietnamese(ocr.merchant or "")
-    for item in ocr.items:
+    for index, item in enumerate(classified):
+        if item.category_id is not None and (item.classification_confidence or 0) >= 0.55:
+            continue
+
         item_text = item.canonical_name or item.normalized_name or normalize_vietnamese(item.name)
         brand_norm = normalize_vietnamese(item.brand or "")
         text_blob = " ".join(part for part in [merchant_norm, item_text, brand_norm] if part).strip()
@@ -286,55 +364,14 @@ async def classify_receipt_items(db: AsyncSession, user_id: int, ocr: OcrResult)
             reason = f"Khớp từ khóa: {', '.join(best_matches[:3])}"
 
         category = categories.get(matched_name)
-        classified.append(
-            ReceiptItem(
-                name=item.name,
-                price=item.price,
-                qty=item.qty,
-                raw_name=item.raw_name,
-                normalized_name=item.normalized_name,
-                canonical_name=item.canonical_name,
-                brand=item.brand,
-                size_value=item.size_value,
-                size_unit=item.size_unit,
-                removed_tokens=item.removed_tokens,
-                category_id=category.id if category else None,
-                category_name=matched_name if category else None,
-                classification_confidence=confidence,
-                classification_reason=reason,
-            )
+        classified[index] = item.model_copy(
+            update={
+                "category_id": category.id if category else None,
+                "category_name": matched_name if category else None,
+                "classification_confidence": confidence,
+                "classification_reason": reason,
+            }
         )
-
-    llm_candidates = [
-        (index, item)
-        for index, item in enumerate(classified)
-        if (item.category_name == "Khác" or (item.classification_confidence or 0.0) < settings.classify_item_llm_confidence_threshold)
-    ]
-    if llm_candidates and (settings.openai_api_key or settings.gemini_api_key):
-        batch_size = max(1, settings.classify_item_llm_max_items)
-        for start in range(0, len(llm_candidates), batch_size):
-            batch = llm_candidates[start : start + batch_size]
-            llm_result = await llm_classify_receipt_items(
-                db,
-                user_id,
-                ocr.merchant,
-                [item for _, item in batch],
-            )
-            for local_index, (item_index, item) in enumerate(batch):
-                payload = llm_result.get(local_index)
-                if not payload:
-                    continue
-                category = categories.get(payload["category"])
-                if not category:
-                    continue
-                classified[item_index] = item.model_copy(
-                    update={
-                        "category_id": category.id,
-                        "category_name": category.name,
-                        "classification_confidence": max(item.classification_confidence or 0.0, payload["confidence"]),
-                        "classification_reason": payload["reason"],
-                    }
-                )
 
     return classified
 
@@ -347,10 +384,13 @@ async def _aggregate_item_categories(db: AsyncSession, items: list[ReceiptItem])
     for item in items:
         if item.category_id is None or item.category_name is None:
             continue
-        weight = max(item.price, 1.0) * max(item.qty, 1)
+        qty = float(item.qty) if item.qty is not None else 1.0
+        if qty <= 0:
+            qty = 1.0
+        weight = max(float(item.price), 1.0) * qty
         weighted[item.category_id] += weight
         names[item.category_id] = item.category_name
-        item_counts[item.category_id] += max(item.qty, 1)
+        item_counts[item.category_id] += 1
 
     if not weighted:
         return None
@@ -360,7 +400,7 @@ async def _aggregate_item_categories(db: AsyncSession, items: list[ReceiptItem])
             category_id=category_id,
             category_name=names[category_id],
             total_amount=round(total_amount, 2),
-            item_count=item_counts[category_id],
+            item_count=int(item_counts[category_id]),
         )
         for category_id, total_amount in weighted.most_common()
     ]

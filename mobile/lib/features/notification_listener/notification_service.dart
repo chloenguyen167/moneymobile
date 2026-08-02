@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:notification_listener_service/notification_event.dart';
 import 'package:notification_listener_service/notification_listener_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/notifications/local_notification_service.dart';
 import '../../core/providers/providers.dart';
@@ -13,9 +14,21 @@ import '../../data/remote/tuchi_repository.dart';
 import 'notification_parser.dart';
 import 'template_cache.dart';
 
+/// Package labels aligned with backend `DEFAULT_TEMPLATES`.
+const supportedNotificationPackages = <String, String>{
+  'com.VCB': 'Vietcombank',
+  'com.mbmobile': 'MB Bank',
+  'com.mservice.momotransfer': 'MoMo',
+  'com.vietinbank.ipay': 'VietinBank',
+  'com.tpb.mobilebanking': 'TPBank',
+  'vn.com.techcombank.bb.app': 'Techcombank',
+};
+
 /// Phase 2: Android Notification Capture — on-device parse, structured fields only to server.
 class NotificationCaptureService {
   NotificationCaptureService(this._repo);
+
+  static const enabledPrefsKey = 'notification_capture_enabled';
 
   final TuchiRepository _repo;
   TemplateCache? _cache;
@@ -26,12 +39,23 @@ class NotificationCaptureService {
 
   bool get isRunning => _running;
 
+  Future<bool> isEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(enabledPrefsKey) ?? false;
+  }
+
+  Future<void> setEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(enabledPrefsKey, enabled);
+  }
+
   Future<void> start() async {
     if (!Platform.isAndroid || _running) return;
 
     final granted = await NotificationListenerService.isPermissionGranted();
     if (!granted) return;
 
+    await setEnabled(true);
     await _refreshTemplates();
     await LocalNotificationService.instance.showForegroundService();
 
@@ -44,6 +68,9 @@ class NotificationCaptureService {
     await _sub?.cancel();
     _sub = null;
     _running = false;
+    await setEnabled(false);
+    await LocalNotificationService.instance.cancelForegroundService();
+    log('NotificationCaptureService stopped');
   }
 
   Future<bool> requestPermission() async {
@@ -114,15 +141,7 @@ class NotificationCaptureService {
   }
 
   String _packageLabel(String packageName) {
-    const labels = {
-      'com.VCB': 'Vietcombank',
-      'com.mbmobile': 'MB Bank',
-      'com.mservice.momotransfer': 'MoMo',
-      'com.zing.zalo': 'ZaloPay',
-      'com.vietinbank.ipay': 'VietinBank',
-      'com.tpb.mobilebanking': 'TPBank',
-    };
-    return labels[packageName] ?? packageName.split('.').last;
+    return supportedNotificationPackages[packageName] ?? packageName.split('.').last;
   }
 }
 

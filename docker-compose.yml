@@ -30,12 +30,23 @@ services:
     build: ./backend
     ports:
       - "8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       DATABASE_URL: postgresql+asyncpg://tuchi:tuchi_dev@postgres:5432/tuchi
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: dev-secret-change-in-production
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OLLAMA_ENABLED: ${OLLAMA_ENABLED:-true}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_VL_MODEL: ${OLLAMA_VL_MODEL:-qwen3-vl:4b}
+      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-qwen3:8b}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-180}
+      VIETOCR_ENABLED: ${VIETOCR_ENABLED:-true}
+      VIETOCR_MODEL: ${VIETOCR_MODEL:-vgg_seq2seq}
+      VIETOCR_DEVICE: ${VIETOCR_DEVICE:-}
+      VIETOCR_MAX_IMAGE_WIDTH: ${VIETOCR_MAX_IMAGE_WIDTH:-1600}
       FCM_ENABLED: ${FCM_ENABLED:-false}
       FIREBASE_CREDENTIALS_PATH: ${FIREBASE_CREDENTIALS_PATH:-}
       USE_SENTENCE_EMBEDDINGS: ${USE_SENTENCE_EMBEDDINGS:-false}

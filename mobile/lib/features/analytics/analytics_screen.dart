@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/format.dart';
 import '../../data/models/models.dart';
 
 class AnalyticsScreen extends ConsumerWidget {
@@ -15,7 +16,6 @@ class AnalyticsScreen extends ConsumerWidget {
     final analyticsAsync = ref.watch(analyticsProvider);
     final cashflowProfileAsync = ref.watch(cashflowProfileProvider);
     final alertsAsync = ref.watch(alertsProvider);
-    final pipelineAsync = ref.watch(pipelineHealthProvider);
     final subsSummaryAsync = ref.watch(subscriptionsProvider);
 
     return analyticsAsync.when(
@@ -28,7 +28,6 @@ class AnalyticsScreen extends ConsumerWidget {
             ref.invalidate(cashflowProfileProvider);
             ref.invalidate(cashflowInsightsProvider);
             ref.invalidate(alertsProvider);
-            ref.invalidate(pipelineHealthProvider);
             ref.invalidate(subscriptionsProvider);
             await ref.read(analyticsProvider.future);
           },
@@ -49,7 +48,7 @@ class AnalyticsScreen extends ConsumerWidget {
                   TextButton.icon(
                     onPressed: () => _showCashflowSetupDialog(context, ref),
                     icon: const Icon(Icons.tune),
-                    label: const Text('Cashflow'),
+                    label: const Text('Số dư'),
                   ),
                 ],
               ),
@@ -67,7 +66,7 @@ class AnalyticsScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Không tải được cấu hình cashflow'),
+                        const Text('Không tải được cấu hình số dư'),
                         const SizedBox(height: 8),
                         Text(
                           '$e',
@@ -100,7 +99,7 @@ class AnalyticsScreen extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'Không tải được dự báo cashflow',
+                              'Không tải được dự báo số dư',
                               style: TextStyle(fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 8),
@@ -149,7 +148,7 @@ class AnalyticsScreen extends ConsumerWidget {
               const SizedBox(height: 24),
               if (summary.byCategory.isNotEmpty) ...[
                 Text(
-                  'Theo category',
+                  'Theo danh mục',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 16),
@@ -234,11 +233,11 @@ class AnalyticsScreen extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Dự báo theo category (Holt-Winters)',
+                      'Dự báo theo danh mục',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     Text(
-                      '${summary.categoryForecasts.length} category',
+                      '${summary.categoryForecasts.length} nhóm',
                       style: const TextStyle(
                         color: AppColors.onSurfaceMuted,
                         fontSize: 12,
@@ -261,7 +260,7 @@ class AnalyticsScreen extends ConsumerWidget {
                       ),
                       title: Text(f['category_name'] as String? ?? ''),
                       subtitle: Text(
-                        '${f['method'] ?? 'forecast'} · ${f['historical_months'] ?? 0} tháng dữ liệu',
+                        'Dựa trên ${f['historical_months'] ?? 0} tháng gần đây',
                       ),
                       trailing: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -304,7 +303,7 @@ class AnalyticsScreen extends ConsumerWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Subscription đang active',
+                            'Chi tiêu định kỳ',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           TextButton(
@@ -320,89 +319,10 @@ class AnalyticsScreen extends ConsumerWidget {
                             color: AppColors.secondary,
                           ),
                           title: Text(
-                            '${subs.length} subscription · ${formatVnd(total)}/tháng',
+                            '${subs.length} khoản · ${formatVnd(total)}/tháng',
                           ),
                           subtitle: Text(
                             subs.take(3).map((s) => s.merchantName).join(', '),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              pipelineAsync.when(
-                loading: () => const SizedBox.shrink(),
-                error: (_, _) => const SizedBox.shrink(),
-                data: (health) {
-                  if (health.ocrTotal == 0 && health.classifyTotal == 0) {
-                    return const SizedBox.shrink();
-                  }
-                  final isWarning = health.status == 'warning';
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 24),
-                      Text(
-                        'Pipeline health (${health.periodDays} ngày)',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Card(
-                        color: isWarning
-                            ? AppColors.primary.withValues(alpha: 0.15)
-                            : null,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    isWarning
-                                        ? Icons.warning_amber
-                                        : Icons.check_circle,
-                                    color: isWarning
-                                        ? AppColors.warning
-                                        : AppColors.success,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    isWarning ? 'Cần tối ưu GPU' : 'Ổn định',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'OCR smart track: ${health.ocrSmartTrackPct.toStringAsFixed(1)}% · '
-                                'Classify LLM: ${health.classifySmartTrackPct.toStringAsFixed(1)}% · '
-                                'Mục tiêu ≤ ${health.targetSmartTrackPct.toStringAsFixed(0)}%',
-                                style: const TextStyle(
-                                  color: AppColors.onSurfaceMuted,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              if (health.recommendations.isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                ...health.recommendations.map(
-                                  (r) => Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      '• $r',
-                                      style: const TextStyle(
-                                        color: AppColors.onSurfaceMuted,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
                           ),
                         ),
                       ),
@@ -424,21 +344,20 @@ class AnalyticsScreen extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
-                      ...alerts
-                          .take(5)
-                          .map(
-                            (a) => Card(
-                              color: AppColors.primary.withValues(alpha: 0.12),
-                              child: ListTile(
-                                leading: const Icon(
-                                  Icons.notifications_active,
-                                  color: AppColors.warning,
-                                ),
-                                title: Text(a.type),
-                                subtitle: Text(a.payload.toString()),
-                              ),
+                      ...alerts.take(5).map((a) {
+                        final friendly = _friendlyAlert(a);
+                        return Card(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          child: ListTile(
+                            leading: const Icon(
+                              Icons.notifications_active,
+                              color: AppColors.warning,
                             ),
+                            title: Text(friendly.$1),
+                            subtitle: Text(friendly.$2),
                           ),
+                        );
+                      }),
                     ],
                   );
                 },
@@ -471,7 +390,7 @@ class AnalyticsScreen extends ConsumerWidget {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
           title: Text(
-            initial == null ? 'Thiết lập cashflow' : 'Cập nhật cashflow',
+            initial == null ? 'Thiết lập số dư' : 'Cập nhật số dư',
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -565,6 +484,47 @@ class AnalyticsScreen extends ConsumerWidget {
   }
 }
 
+(String, String) _friendlyAlert(AlertModel a) {
+  final payload = a.payload;
+  final category = payload['category_name']?.toString() ??
+      payload['category']?.toString();
+  final percent = payload['percent_used'] ?? payload['percent'];
+  final spent = payload['spent'];
+  final limit = payload['limit_amount'] ?? payload['limit'];
+
+  switch (a.type) {
+    case 'budget_80':
+      return (
+        'Sắp hết ngân sách',
+        category != null
+            ? '$category đã dùng khoảng ${percent ?? 80}%'
+            : 'Một danh mục đã dùng khoảng 80% hạn mức',
+      );
+    case 'budget_100':
+      return (
+        'Đã hết ngân sách',
+        category != null
+            ? '$category đã đạt hạn mức'
+            : 'Một danh mục đã đạt hạn mức',
+      );
+    case 'budget_120':
+      return (
+        'Vượt ngân sách',
+        category != null
+            ? '$category đã vượt hạn mức'
+            : 'Một danh mục đã vượt hạn mức',
+      );
+    default:
+      if (category != null && spent != null && limit != null) {
+        return (
+          'Cảnh báo ngân sách',
+          '$category: ${formatVnd(spent as num)} / ${formatVnd(limit as num)}',
+        );
+      }
+      return ('Nhắc nhở', 'Kiểm tra chi tiêu của bạn');
+  }
+}
+
 class _CashflowSetupCard extends StatelessWidget {
   const _CashflowSetupCard({required this.onSetup});
 
@@ -602,7 +562,7 @@ class _CashflowSetupCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: const Text(
-                    'Cashflow Planner',
+                    'Quản lý số dư',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
@@ -612,7 +572,7 @@ class _CashflowSetupCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 const Text(
-                  'Thiết lập dòng tiền tháng để biết bạn đang chi ổn hay đang tiêu quá nhanh.',
+                  'Thiết lập số dư để biết bạn đang chi ổn hay tiêu quá nhanh.',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
@@ -622,7 +582,7 @@ class _CashflowSetupCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Nhập số dư đầu tháng. Nếu có thêm thu nhập tháng, dự báo và gợi ý cắt giảm sẽ sát hơn.',
+                  'Nhập số dư đầu tháng. Nếu có thêm thu nhập tháng, dự báo sẽ sát hơn.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.84),
                     height: 1.4,

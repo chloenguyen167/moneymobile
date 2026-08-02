@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/format.dart';
+import '../../data/models/models.dart';
 import '../notification_listener/notification_parser.dart';
 
-/// Quick-add via pasted/shared notification text (iOS Share Sheet alternative).
+/// Primary: manual add. Secondary: paste bank notification text.
 class QuickAddScreen extends ConsumerStatefulWidget {
   const QuickAddScreen({super.key, this.initialText});
 
@@ -15,19 +18,63 @@ class QuickAddScreen extends ConsumerStatefulWidget {
   ConsumerState<QuickAddScreen> createState() => _QuickAddScreenState();
 }
 
-class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
-  late final _textCtrl = TextEditingController(text: widget.initialText ?? '');
+class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+  late final TextEditingController _amountCtrl;
+  late final TextEditingController _merchantCtrl;
+  late final TextEditingController _pasteCtrl;
+  int? _categoryId;
   bool _loading = false;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: 2, vsync: this);
+    _amountCtrl = TextEditingController();
+    _merchantCtrl = TextEditingController();
+    _pasteCtrl = TextEditingController(text: widget.initialText ?? '');
+  }
+
+  @override
   void dispose() {
-    _textCtrl.dispose();
+    _tabs.dispose();
+    _amountCtrl.dispose();
+    _merchantCtrl.dispose();
+    _pasteCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final text = _textCtrl.text.trim();
+  Future<void> _saveManual() async {
+    final amount = parseVndInput(_amountCtrl.text);
+    if (amount == null || amount <= 0) {
+      setState(() => _error = 'Nhập số tiền hợp lệ');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await ref.read(repositoryProvider).createTransaction(
+            amount: amount,
+            merchantName: _merchantCtrl.text.trim().isEmpty
+                ? null
+                : _merchantCtrl.text.trim(),
+            categoryId: _categoryId,
+          );
+      invalidateTransactionRelated(ref);
+      if (mounted) context.pop(true);
+    } catch (_) {
+      setState(() => _error = 'Không lưu được. Thử lại nhé.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _savePaste() async {
+    final text = _pasteCtrl.text.trim();
     if (text.isEmpty) return;
 
     setState(() {
@@ -38,7 +85,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final parsed = parseGenericAmount(text);
     if (parsed == null) {
       setState(() {
-        _error = 'Không tìm thấy số tiền trong text';
+        _error = 'Không tìm thấy số tiền trong nội dung';
         _loading = false;
       });
       return;
@@ -50,10 +97,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             amount: parsed.amount,
             merchant: parsed.merchant,
           );
-      ref.invalidate(transactionsProvider);
-      if (mounted) Navigator.pop(context, true);
-    } catch (e) {
-      setState(() => _error = e.toString());
+      invalidateTransactionRelated(ref);
+      if (mounted) context.pop(true);
+    } catch (_) {
+      setState(() => _error = 'Không lưu được. Thử lại nhé.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -61,44 +108,171 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final categories = ref.watch(categoriesProvider).valueOrNull ?? [];
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Thêm nhanh')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Dán nội dung thông báo/email giao dịch',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Dùng khi share từ app ngân hàng/ví (iOS) hoặc copy SMS.',
-              style: const TextStyle(color: AppColors.onSurfaceMuted, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _textCtrl,
-              maxLines: 6,
-              decoration: const InputDecoration(
-                hintText: 'VD: TK ... -500,000VND luc 14:30 tai HIGHLANDS COFFEE',
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ],
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: _loading ? null : _submit,
-              child: _loading
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Thêm giao dịch'),
-            ),
+      appBar: AppBar(
+        title: const Text('Thêm nhanh'),
+        bottom: TabBar(
+          controller: _tabs,
+          labelColor: AppColors.onSecondary,
+          unselectedLabelColor: AppColors.onSecondary.withValues(alpha: 0.65),
+          indicatorColor: AppColors.primary,
+          tabs: const [
+            Tab(text: 'Nhập tay'),
+            Tab(text: 'Dán thông báo'),
           ],
         ),
       ),
+      body: TabBarView(
+        controller: _tabs,
+        children: [
+          _ManualTab(
+            amountCtrl: _amountCtrl,
+            merchantCtrl: _merchantCtrl,
+            categories: categories,
+            categoryId: _categoryId,
+            onCategory: (v) => setState(() => _categoryId = v),
+            loading: _loading,
+            error: _error,
+            onSave: _saveManual,
+          ),
+          _PasteTab(
+            controller: _pasteCtrl,
+            loading: _loading,
+            error: _error,
+            onSave: _savePaste,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ManualTab extends StatelessWidget {
+  const _ManualTab({
+    required this.amountCtrl,
+    required this.merchantCtrl,
+    required this.categories,
+    required this.categoryId,
+    required this.onCategory,
+    required this.loading,
+    required this.error,
+    required this.onSave,
+  });
+
+  final TextEditingController amountCtrl;
+  final TextEditingController merchantCtrl;
+  final List<CategoryModel> categories;
+  final int? categoryId;
+  final ValueChanged<int?> onCategory;
+  final bool loading;
+  final String? error;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        TextField(
+          controller: amountCtrl,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Số tiền',
+            suffixText: 'đ',
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: merchantCtrl,
+          decoration: const InputDecoration(
+            labelText: 'Người nhận / cửa hàng',
+            hintText: 'Không bắt buộc',
+          ),
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<int?>(
+          value: categoryId,
+          decoration: const InputDecoration(labelText: 'Danh mục'),
+          items: [
+            const DropdownMenuItem<int?>(
+              value: null,
+              child: Text('Chưa phân loại'),
+            ),
+            ...categories.map(
+              (c) => DropdownMenuItem<int?>(value: c.id, child: Text(c.name)),
+            ),
+          ],
+          onChanged: onCategory,
+        ),
+        if (error != null) ...[
+          const SizedBox(height: 12),
+          Text(error!, style: const TextStyle(color: AppColors.error)),
+        ],
+        const SizedBox(height: 20),
+        FilledButton(
+          onPressed: loading ? null : onSave,
+          child: loading
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Lưu giao dịch'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PasteTab extends StatelessWidget {
+  const _PasteTab({
+    required this.controller,
+    required this.loading,
+    required this.error,
+    required this.onSave,
+  });
+
+  final TextEditingController controller;
+  final bool loading;
+  final String? error;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Dán nội dung SMS / thông báo ngân hàng, ví điện tử.',
+          style: TextStyle(color: AppColors.onSurfaceMuted, height: 1.4),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: controller,
+          maxLines: 6,
+          decoration: const InputDecoration(
+            hintText:
+                'VD: TK ... -500,000VND luc 14:30 tai HIGHLANDS COFFEE',
+          ),
+        ),
+        if (error != null) ...[
+          const SizedBox(height: 12),
+          Text(error!, style: const TextStyle(color: AppColors.error)),
+        ],
+        const SizedBox(height: 20),
+        FilledButton(
+          onPressed: loading ? null : onSave,
+          child: loading
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Thêm giao dịch'),
+        ),
+      ],
     );
   }
 }

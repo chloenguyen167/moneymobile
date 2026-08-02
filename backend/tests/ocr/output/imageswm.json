@@ -1,0 +1,28 @@
+{
+  "merchant": "WinMart+",
+  "items": [
+    {
+      "name": "LÊ GIA mắm tôm 110g",
+      "price": 17500.0,
+      "qty": 1.0,
+      "line_total": 17500.0
+    },
+    {
+      "name": "KEWPIE Nước xốt mè rang chai 500ml",
+      "price": 133500.0,
+      "qty": 1.0,
+      "line_total": 113900.0
+    },
+    {
+      "name": "WMNK Táo Royal Gala NZL",
+      "price": 89900.0,
+      "qty": 1.344,
+      "line_total": 106176.0
+    }
+  ],
+  "total_amount": 237576.0,
+  "transaction_date": "2026-04-25",
+  "ocr_track_used": "vintern",
+  "ocr_confidence": 0.99,
+  "raw_text": "...\nWinMart* is@naizoheuisinhtten 5280528c4701 {06018722 Ma caT: 428-CFiioon/j9totỆ5 ìW;8tẳnqtẵí: @4 m2ĩtệì 2ỆJ: 175pè KBR#Mr# xýfGtj*í9 shì-{87à f4íbềc 113,924 ,7D8 TíỡfìọỳfỆl R*4 H44o; fóẨg TìPN\nWinMart* PHIEU TÍNH TIÊN 25,04/2526 JimsEh4i7gYy 0ed;872/ 714/81,260204 35 cOT: 01-25 Ccvo 79604225 hanggia TTlen GIA mimIôm 116J 17,500 Kewp; Nc Unc cha 507 13 200 113 49* WVNK Tao Aoyel Gala NZ 414650 ICa,'76 Tong Tien 444750 227,5/6 Jhznntgan 217,570 Q6 04 {ual haa Con Koac UJy cap Nalnoazon wina _ Yn |onp Xin Ju €hC chlu Irach nnJ0McaqUi\nDoea"
+}

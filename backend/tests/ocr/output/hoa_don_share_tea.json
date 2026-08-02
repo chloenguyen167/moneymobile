@@ -1,0 +1,28 @@
+{
+  "merchant": "Share Tea",
+  "items": [
+    {
+      "name": "Trà sữa trần châu nhỏ",
+      "price": 43000.0,
+      "qty": 1.0,
+      "line_total": 43000.0
+    },
+    {
+      "name": "Trà xanh xoài kem sữa",
+      "price": 48000.0,
+      "qty": 1.0,
+      "line_total": 48000.0
+    },
+    {
+      "name": "Sương sáo",
+      "price": 8000.0,
+      "qty": 1.0,
+      "line_total": 8000.0
+    }
+  ],
+  "total_amount": 69300.0,
+  "transaction_date": "2017-03-29",
+  "ocr_track_used": "vintern",
+  "ocr_confidence": 0.99,
+  "raw_text": "69.300\nShare,29  Siice 9882 131 Nguyễn Huệ - Quân 1 Tel: PHIỂU THANH TOÁ\" SõHĐ: 00010 Thu ngẩn:   TEAM 29.03,2017 17 08 Tến món Đ.Giá T:Tiên Tràisũa trân chẩu nhỏ; 43 Ooo 43 000 809 Đừờng: 4508 Đá Sưdng sáo 8000 8000 Trà xanh xoàl kem sỮa 48000 48,000 809 Đường 509 Đá Thành tíền: 99 000 Tiền chiết khãu 30% 29 700 Tíền Thanh Toán 69 300 Tiền mặt VND 69 300\nKhách đua: Tr# khch;\n99 00o 29.700\n0905 506 108\n7 5"
+}

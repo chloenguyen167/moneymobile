@@ -14,8 +14,11 @@ celery[redis]==5.4.0
 redis==5.2.1
 pgvector==0.3.6
 numpy==2.2.0
-Pillow==11.0.0
+Pillow==10.2.0
 opencv-python-headless==4.10.0.84
+vietocr>=0.3.13
+torchvision>=0.20.0
+setuptools>=69,<81
 rapidfuzz==3.10.1
 statsmodels==0.14.4
 pandas==2.2.3

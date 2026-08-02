@@ -1,0 +1,22 @@
+{
+  "merchant": "Ốc Vàng",
+  "items": [
+    {
+      "name": "Sò huyết xào me",
+      "price": 39000.0,
+      "qty": 1.0,
+      "line_total": 39000.0
+    },
+    {
+      "name": "Sò huyết xào sat",
+      "price": 39000.0,
+      "qty": 2.0,
+      "line_total": 78000.0
+    }
+  ],
+  "total_amount": 117000.0,
+  "transaction_date": null,
+  "ocr_track_used": "vintern",
+  "ocr_confidence": 0.97,
+  "raw_text": "...\nOc Vàng 82 Thien Fhuo Pg Q Tan Binh PHIẼU THANH TOÁN Khu: Ngoal San Yao 0101/1 19 51 Ban: 14 Wn 0,04 1 1 15 7 Tan NV; Ton mon SL 0G T Tien\nSo huyêl xao me 39 000 39,000 So huyêl xao sa ( 2 39,000 78 000\nTổnp cộng 117,000 Chutc quý khách vui ves hen gdp lall"
+}

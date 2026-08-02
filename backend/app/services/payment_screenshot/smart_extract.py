@@ -22,10 +22,17 @@ Return JSON only with keys:
 - confidence
 
 Rules:
-1. This is NOT a receipt with many items.
-2. Prefer the payee / merchant / receiver as merchant.
-3. Ignore UI labels, ads, balances, and decorative text.
-4. If a field is missing, return null.
+1. This is NOT a receipt with many items — one transfer amount only.
+2. total_amount = số tiền chuyển đầy đủ gần chữ VND/đ, dạng số nguyên VND.
+   Example: "14,350,000 VND" → 14350000 (NOT 4350, NOT 14350).
+   NEVER use: mã giao dịch (661V00924158ASXP), số tài khoản, OTP, ngày giờ, số dư.
+3. merchant = TÊN NGƯỜI NHẬN (payee/receiver), e.g. TRAN THI THANH.
+   NEVER append UI chips: "Đã lưu", "Saved".
+   NEVER use: "Cảm ơn…", quảng cáo miễn phí, "Giao dịch thành công", tên ngân hàng gửi.
+4. description = nội dung chuyển khoản (memo), not the thank-you banner.
+5. reference_code = mã giao dịch alphanumeric.
+6. Ignore UI labels, ads, balances, decorative text.
+7. If a field is missing, return null.
 """
 
 
@@ -180,10 +187,16 @@ def _parse_amount_value(value: object) -> float | None:
 
     if isinstance(value, (int, float)):
         amount = float(value)
+        if amount < 1000 or amount >= 100_000_000_000:
+            return None
         return amount if amount > 0 else None
 
     raw = str(value).strip().lower()
     if not raw:
+        return None
+
+    # Reject alphanumeric txn ids mistaken for amounts
+    if re.search(r"[a-z]", raw) and re.search(r"\d", raw):
         return None
 
     raw = raw.replace("vnd", "").replace("đ", "").replace("d", "")
@@ -197,4 +210,6 @@ def _parse_amount_value(value: object) -> float | None:
     except ValueError:
         return None
 
-    return amount if amount > 0 else None
+    if amount < 1000 or amount >= 100_000_000_000:
+        return None
+    return amount

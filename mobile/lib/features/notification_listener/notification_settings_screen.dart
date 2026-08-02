@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/notifications/local_notification_service.dart';
 import '../../core/theme/app_colors.dart';
 import 'notification_service.dart';
 
@@ -13,24 +14,54 @@ class NotificationSettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<NotificationSettingsScreen> createState() => _NotificationSettingsScreenState();
 }
 
-class _NotificationSettingsScreenState extends ConsumerState<NotificationSettingsScreen> {
+class _NotificationSettingsScreenState extends ConsumerState<NotificationSettingsScreen>
+    with WidgetsBindingObserver {
   bool _granted = false;
   bool _running = false;
+  bool _enabled = false;
   bool _loading = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _onResumed();
+    }
+  }
+
+  Future<void> _onResumed() async {
+    if (!Platform.isAndroid) return;
+    final service = ref.read(notificationCaptureProvider);
+    final granted = await service.isPermissionGranted();
+    final enabled = await service.isEnabled();
+    if (granted && enabled && !service.isRunning) {
+      await LocalNotificationService.instance.requestPostNotificationsPermission();
+      await service.start();
+    }
+    await _checkStatus();
   }
 
   Future<void> _checkStatus() async {
     if (!Platform.isAndroid) return;
     final service = ref.read(notificationCaptureProvider);
     final granted = await service.isPermissionGranted();
+    final enabled = await service.isEnabled();
     if (mounted) {
       setState(() {
         _granted = granted;
+        _enabled = enabled;
         _running = service.isRunning;
       });
     }
@@ -39,10 +70,14 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
   Future<void> _requestPermission() async {
     setState(() => _loading = true);
     final service = ref.read(notificationCaptureProvider);
+    await LocalNotificationService.instance.requestPostNotificationsPermission();
     final granted = await service.requestPermission();
+    // System settings may open; mark enabled so resume can start capture.
     if (granted) {
       await service.start();
       ref.read(alertPollerProvider).start();
+    } else {
+      await service.setEnabled(true);
     }
     await _checkStatus();
     if (mounted) setState(() => _loading = false);
@@ -55,6 +90,7 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
         await _requestPermission();
         return;
       }
+      await LocalNotificationService.instance.requestPostNotificationsPermission();
       await service.start();
       ref.read(alertPollerProvider).start();
     } else {
@@ -97,7 +133,11 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
             Card(
               child: SwitchListTile(
                 title: const Text('Bật theo dõi tự động'),
-                subtitle: Text(_granted ? 'Quyền đã cấp' : 'Cần cấp quyền Notification Access'),
+                subtitle: Text(
+                  _granted
+                      ? (_running ? 'Đang theo dõi' : (_enabled ? 'Đang chờ quyền / khởi động' : 'Quyền đã cấp'))
+                      : 'Cần cấp quyền Notification Access',
+                ),
                 value: _running && _granted,
                 onChanged: _loading ? null : _toggleService,
               ),
@@ -115,10 +155,8 @@ class _NotificationSettingsScreenState extends ConsumerState<NotificationSetting
             const SizedBox(height: 24),
             Text('App được hỗ trợ', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
-            const _SupportedAppTile(name: 'Vietcombank', package: 'com.VCB'),
-            const _SupportedAppTile(name: 'MB Bank', package: 'com.mbmobile'),
-            const _SupportedAppTile(name: 'MoMo', package: 'com.mservice.momotransfer'),
-            const _SupportedAppTile(name: 'ZaloPay', package: 'com.zing.zalo'),
+            for (final entry in supportedNotificationPackages.entries)
+              _SupportedAppTile(name: entry.value, package: entry.key),
             const SizedBox(height: 16),
             Text(
               'Template regex được cập nhật từ server — không cần cập nhật app.',

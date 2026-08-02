@@ -14,6 +14,17 @@ from app.routers import analytics, auth, devices, email, notification_templates,
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Additive columns for existing DBs (create_all does not ALTER)
+        for stmt in (
+            "DO $$ BEGIN CREATE TYPE transactiontype AS ENUM ('expense', 'income'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+            "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS transaction_type transactiontype DEFAULT 'expense'",
+            "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS image_path VARCHAR(500)",
+            "UPDATE transactions SET transaction_type = 'expense' WHERE transaction_type IS NULL",
+        ):
+            try:
+                await conn.execute(text(stmt))
+            except Exception:
+                pass
         try:
             await conn.execute(text("""
                 CREATE INDEX IF NOT EXISTS idx_transaction_embeddings_vector
@@ -25,6 +36,8 @@ async def lifespan(app: FastAPI):
             """))
         except Exception:
             pass
+    from app.services.storage import ensure_upload_dir
+    ensure_upload_dir()
     yield
 
 

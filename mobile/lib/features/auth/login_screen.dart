@@ -63,10 +63,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
       }
     } catch (e) {
-      setState(() => _error = 'Không kết nối được backend.\n'
-          'URL: ${AppConfig.apiBaseUrl}\n\n'
-          '${AppConfig.ipadHint}\n\n'
-          'Trên Mac chạy: ipconfig getifaddr en0');
+      setState(() => _error = 'Không kết nối được máy chủ. Kiểm tra địa chỉ và thử lại.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -117,7 +114,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Quản lý chi tiêu thông minh — OCR + AI',
+                    'Theo dõi chi tiêu dễ dàng',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.onSurfaceMuted),
                   ),
@@ -139,7 +136,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       controller: _serverUrl,
                       keyboardType: TextInputType.url,
                       decoration: const InputDecoration(
-                        labelText: 'Backend URL',
+                        labelText: 'Địa chỉ máy chủ',
                         hintText: 'http://192.168.1.5:8000/api/v1',
                       ),
                     ),
@@ -156,7 +153,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         Expanded(
                           child: TextButton(
                             onPressed: _loading ? null : _saveServer,
-                            child: const Text('Lưu URL'),
+                            child: const Text('Lưu'),
                           ),
                         ),
                       ],
@@ -167,7 +164,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       alignment: Alignment.centerRight,
                       child: TextButton(
                         onPressed: () => setState(() => _showServer = true),
-                        child: Text('Server: ${AppConfig.apiBaseUrl}', style: const TextStyle(fontSize: 11)),
+                        child: const Text(
+                          'Cài đặt kết nối',
+                          style: TextStyle(fontSize: 12),
+                        ),
                       ),
                     ),
                   if (_isRegister)

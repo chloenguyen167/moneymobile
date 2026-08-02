@@ -1,4 +1,4 @@
-"""Smart Track OCR — Phase 3: Vintern → Gemini → OpenAI → heuristic cascade."""
+"""Smart Track OCR — Vintern → Gemini → OpenAI → heuristic (no Qwen-VL)."""
 
 import base64
 import json
@@ -17,6 +17,7 @@ SMART_PROMPT = """Extract receipt data from this Vietnamese receipt image/text.
 Return JSON only with keys: merchant, items (array of {name, price, qty}), total_amount (number), transaction_date (YYYY-MM-DD), confidence (0-1).
 If text hint is provided, use it to correct OCR errors especially Vietnamese diacritics."""
 
+
 def _image_mime(image_bytes: bytes) -> str:
     if image_bytes[:8] == b"\x89PNG\r\n\x1a\n":
         return "image/png"
@@ -26,13 +27,16 @@ def _image_mime(image_bytes: bytes) -> str:
         return "image/webp"
     return "image/jpeg"
 
+
 async def run_smart_track(
     image_bytes: bytes,
     raw_text: str | None = None,
     end_to_end: bool = False,
 ) -> OcrResult:
-    # 1. Vintern-1B self-host (preferred for Vietnamese)
-    vintern_result = await run_vintern(image_bytes, raw_text if not end_to_end else None)
+    hint = raw_text if not end_to_end else None
+
+    # 1. Vintern-1B self-host (optional)
+    vintern_result = await run_vintern(image_bytes, hint)
     if vintern_result and vintern_result.ocr_confidence >= settings.vintern_confidence_threshold:
         return vintern_result
 
@@ -50,7 +54,7 @@ async def run_smart_track(
             openai_result.ocr_track_used = "openai"
             return openai_result
 
-    # 4. Use low-confidence Vintern if available
+    # 4. Low-confidence Vintern if available
     if vintern_result:
         return vintern_result
 
@@ -92,7 +96,9 @@ async def _openai_extract(image_bytes: bytes, raw_text: str | None, end_to_end: 
     user_content: list[dict] = [{"type": "text", "text": SMART_PROMPT}]
     if raw_text and not end_to_end:
         user_content.append({"type": "text", "text": f"OCR hint:\n{raw_text}"})
-    user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+    user_content.append(
+        {"type": "image_url", "image_url": {"url": f"data:{_image_mime(image_bytes)};base64,{b64}"}}
+    )
 
     try:
         async with httpx.AsyncClient(timeout=60) as client:
@@ -121,9 +127,19 @@ def _json_to_ocr_result(data: dict, track: str) -> OcrResult:
             continue
         try:
             qty_raw = i.get("qty", 1)
-            qty = max(1, int(round(float(qty_raw))))
+            qty = float(qty_raw) if qty_raw is not None else 1.0
+            if qty <= 0:
+                qty = 1.0
             price = float(i["price"])
-            items.append(ReceiptItem(name=str(i["name"]).strip(), price=price, qty=qty))
+            unit_price = i.get("unit_price")
+            items.append(
+                ReceiptItem(
+                    name=str(i["name"]).strip(),
+                    price=price,
+                    qty=qty,
+                    unit_price=float(unit_price) if unit_price is not None else None,
+                )
+            )
         except (TypeError, ValueError):
             continue
     tx_date = None

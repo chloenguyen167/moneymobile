@@ -1,0 +1,58 @@
+{
+  "merchant": "Bách Hóa Xanh",
+  "items": [
+    {
+      "name": "Đùi Tỏi Gà Nhập Khẩu",
+      "price": 80000.0,
+      "qty": 0.87,
+      "line_total": 69600.0
+    },
+    {
+      "name": "Xà Lách Lolo Xanh (KG)",
+      "price": 35000.0,
+      "qty": 0.16,
+      "line_total": 5600.0
+    },
+    {
+      "name": "Ngô Gai-Rau Om",
+      "price": 50000.0,
+      "qty": 0.058,
+      "line_total": 2900.0
+    },
+    {
+      "name": "Ngô Ri (KG)",
+      "price": 52000.0,
+      "qty": 0.116,
+      "line_total": 6032.0
+    },
+    {
+      "name": "Đậu Bắp (KG)",
+      "price": 38000.0,
+      "qty": 0.508,
+      "line_total": 19304.0
+    },
+    {
+      "name": "Hành Lá (KG)",
+      "price": 50000.0,
+      "qty": 0.256,
+      "line_total": 12800.0
+    },
+    {
+      "name": "Khổ Qua (KG)",
+      "price": 45000.0,
+      "qty": 0.498,
+      "line_total": 22410.0
+    },
+    {
+      "name": "Bầu Sao (KG)",
+      "price": 42000.0,
+      "qty": 1.174,
+      "line_total": 49308.0
+    }
+  ],
+  "total_amount": 187500.0,
+  "transaction_date": "2021-07-16",
+  "ocr_track_used": "vintern",
+  "ocr_confidence": 0.99,
+  "raw_text": "...\nBÁCH HÓa XANH Wwwsbachhoexanh,com\n13 Đucng sỂ 9, Khu phơ 7, Phuờng An Lac A, Quan BInh Tan; Thanih ph8 Hauchi MInh; viet PHIEU THANH TOAN {55 CT; 21070052990051966 Ngay CT: 16/07/2021 07.96 Nhan vlen: Trfn Ngoc Thanh Ngan SL Gluilbún T.Tiẵn ĐÙl TỎI GÀ NHẠP KHAU '0.87 80,000 69,600 XA LACH LOLO XANH(KG) 0.16 35,000 5,600 NGÒ GAFRAU @M 0.058 50,000 2,900 NGÒ Rl (Kg)) 0,126 52,000 6,032 ĐẬU BAF(KG) 0,.508 38,000 19,304 HANH LA (KG) 0,256 50,000 12,800 KHÓ QUA 0,498 45,000 22,410 BẨU SAO 1.,174 42,000 49,308\nTông tien:\n187,954\nTlên cà thẻ: Thanh toan: (Đ4 làm tròn)\n187,500"
+}

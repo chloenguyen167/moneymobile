@@ -17,6 +17,24 @@ class ParsedNotification {
   final String? packageName;
 }
 
+/// Normalize template signs (`+/-`, `chi`/`nhan`, etc.) to `+` or `-`.
+String normalizeNotificationSign(String? raw) {
+  if (raw == null || raw.isEmpty) return '-';
+  final s = raw.trim().toLowerCase();
+  if (s == '+' || s == 'nhan' || s == 'nhận' || s == 'credit' || s == 'in') {
+    return '+';
+  }
+  return '-';
+}
+
+String? _namedGroup(RegExpMatch match, String name) {
+  try {
+    return match.namedGroup(name);
+  } catch (_) {
+    return null;
+  }
+}
+
 ParsedNotification? parseNotificationText(
   String text,
   String regexPattern, {
@@ -27,15 +45,15 @@ ParsedNotification? parseNotificationText(
     final match = reg.firstMatch(text);
     if (match == null) return null;
 
-    final amountStr = match.namedGroup('amount')?.replaceAll(',', '').replaceAll('.', '') ?? '';
+    final amountStr = _namedGroup(match, 'amount')?.replaceAll(',', '').replaceAll('.', '') ?? '';
     final amount = double.tryParse(amountStr);
     if (amount == null) return null;
 
     return ParsedNotification(
       amount: amount,
-      merchant: match.namedGroup('merchant')?.trim(),
-      sign: match.namedGroup('sign') ?? '-',
-      time: match.namedGroup('time'),
+      merchant: _namedGroup(match, 'merchant')?.trim(),
+      sign: normalizeNotificationSign(_namedGroup(match, 'sign')),
+      time: _namedGroup(match, 'time'),
       packageName: packageName,
     );
   } catch (_) {
@@ -52,12 +70,12 @@ ParsedNotification? parseGenericAmount(String text, {String? packageName}) {
   for (final reg in patterns) {
     final match = reg.firstMatch(text);
     if (match == null) continue;
-    final amountStr = match.namedGroup('amount')?.replaceAll(',', '').replaceAll('.', '') ?? '';
+    final amountStr = _namedGroup(match, 'amount')?.replaceAll(',', '').replaceAll('.', '') ?? '';
     final amount = double.tryParse(amountStr);
     if (amount != null && amount > 0) {
       return ParsedNotification(
         amount: amount,
-        sign: match.namedGroup('sign') ?? '-',
+        sign: normalizeNotificationSign(_namedGroup(match, 'sign')),
         packageName: packageName,
       );
     }

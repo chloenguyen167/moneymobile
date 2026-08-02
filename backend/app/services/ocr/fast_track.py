@@ -1,118 +1,49 @@
-"""Fast Track OCR — regex/heuristic extraction on VietOCR text (when available)."""
+"""Fast Track: VietOCR raw text → LLM JSON structure.
 
-import re
-from datetime import date, datetime
+Flow (intentional):
+  1. VietOCR (or raw_text_hint) produces RAW text — no regex/parser beforehand
+  2. Qwen3 LLM receives that raw text and returns structured JSON
+  3. Regex parse is ONLY used when Ollama/LLM is unavailable
+
+Classification (merchant/items → categories) happens later in classify.pipeline.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
 from typing import Optional
 
-from app.schemas import OcrResult, ReceiptItem
+from app.schemas import OcrResult
+from app.services.ocr.llm_receipt_extract import llm_struct_enabled, structure_receipt_text
+from app.services.ocr.reference_extract import try_receipt_golden
+from app.services.ocr.receipt_parse import (
+    estimate_parse_confidence,
+    parse_receipt_date,
+    parse_receipt_items,
+    parse_receipt_merchant,
+    parse_receipt_total,
+)
+from app.services.ocr.vietocr_engine import run_vietocr_sync, vietocr_available
 
-# Vietnamese receipt patterns
-AMOUNT_PATTERNS = [
-    r"(?:T[OỔO]NG|Tong|TOTAL|Tổng cộng|Tổng tiền)[:\s]*([\d.,]+)\s*(?:đ|VND|vnđ)?",
-    r"(?:Thanh toán|THANH TOAN)[:\s]*([\d.,]+)",
-    r"([\d.,]+)\s*(?:đ|VND|vnđ)\s*$",
-]
-DATE_PATTERNS = [
-    r"(\d{2}[/-]\d{2}[/-]\d{4})",
-    r"(\d{4}[/-]\d{2}[/-]\d{2})",
-    r"(\d{2}[/-]\d{2}[/-]\d{2})",
-]
-MERCHANT_PATTERNS = [
-    r"^([A-ZÀ-Ỹa-zà-ỹ\s&'.]+(?:CO\.LTD|LTD|JSC|CP)?)",
-]
-
-
-def _parse_amount(text: str) -> Optional[float]:
-    for pattern in AMOUNT_PATTERNS:
-        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
-        if match:
-            raw = match.group(1).replace(".", "").replace(",", "")
-            try:
-                return float(raw)
-            except ValueError:
-                continue
-    return None
-
-
-def _parse_date(text: str) -> Optional[date]:
-    for pattern in DATE_PATTERNS:
-        match = re.search(pattern, text)
-        if match:
-            raw = match.group(1)
-            for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d", "%Y-%m-%d", "%d/%m/%y"):
-                try:
-                    return datetime.strptime(raw, fmt).date()
-                except ValueError:
-                    continue
-    return None
-
-
-def _parse_merchant(text: str) -> Optional[str]:
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
-    for line in lines[:5]:
-        if len(line) > 3 and not re.match(r"^\d", line):
-            if not re.search(r"(đ|VND|tổng|total|ngày|date)", line, re.I):
-                return line.strip()
-    return lines[0] if lines else None
-
-
-def _parse_items(text: str) -> list[ReceiptItem]:
-    items = []
-    item_pattern = r"^(.+?)\s+([\d.,]+)\s*(?:x\s*(\d+))?\s*(?:đ|VND)?$"
-    for line in text.split("\n"):
-        line = line.strip()
-        match = re.match(item_pattern, line, re.I)
-        if match:
-            name, price_str, qty = match.group(1), match.group(2), match.group(3)
-            price = float(price_str.replace(".", "").replace(",", ""))
-            items.append(ReceiptItem(name=name.strip(), price=price, qty=int(qty or 1)))
-    return items[:20]
-
-
-def _estimate_confidence(text: str, amount: Optional[float], dt: Optional[date]) -> float:
-    score = 0.5
-    if amount:
-        score += 0.2
-    if dt:
-        score += 0.15
-    if len(text) > 50:
-        score += 0.1
-    if re.search(r"(đ|VND|tổng|TOTAL)", text, re.I):
-        score += 0.05
-    return min(score, 0.98)
+logger = logging.getLogger(__name__)
 
 
 def _has_local_ocr_engine() -> bool:
-    """True when a real on-box OCR engine (VietOCR/DBNet) is wired in."""
-    return False
+    return vietocr_available()
 
 
-async def run_fast_track(image_bytes: bytes, raw_text_hint: Optional[str] = None) -> OcrResult:
-    """
-    Extract from OCR text hint or local VietOCR output.
-    Without a local engine, returns low confidence so CR-OCR routes to smart track (Vintern/Gemini).
-    """
-    if raw_text_hint:
-        text = raw_text_hint
-    elif _has_local_ocr_engine():
-        text = await _run_local_ocr(image_bytes)
-    else:
-        return OcrResult(
-            merchant=None,
-            items=[],
-            total_amount=None,
-            transaction_date=None,
-            ocr_track_used="fast",
-            ocr_confidence=0.0,
-            raw_text="",
-        )
-
-    amount = _parse_amount(text)
-    dt = _parse_date(text)
-    merchant = _parse_merchant(text)
-    items = _parse_items(text)
-    confidence = _estimate_confidence(text, amount, dt)
-
+def _parse_structured_regex(text: str) -> OcrResult:
+    """Emergency fallback when LLM cannot run. Not used on the happy path."""
+    amount = parse_receipt_total(text)
+    dt = parse_receipt_date(text)
+    merchant = parse_receipt_merchant(text)
+    items = parse_receipt_items(text)
+    confidence = estimate_parse_confidence(text, amount, dt, items, merchant)
+    if items and amount and amount > 0:
+        items_sum = sum(i.price for i in items)
+        if abs(items_sum - amount) / amount < 0.08:
+            confidence = min(0.98, confidence + 0.05)
     return OcrResult(
         merchant=merchant,
         items=items,
@@ -124,6 +55,71 @@ async def run_fast_track(image_bytes: bytes, raw_text_hint: Optional[str] = None
     )
 
 
+async def run_fast_track(image_bytes: bytes, raw_text_hint: Optional[str] = None) -> OcrResult:
+    # --- Step A: raw OCR text only (no structuring yet) ---
+    if raw_text_hint:
+        raw_text = raw_text_hint
+        logger.info("OCR raw text from client hint (%d chars)", len(raw_text))
+    elif _has_local_ocr_engine():
+        raw_text = await _run_local_ocr(image_bytes)
+        logger.info("OCR raw text from VietOCR (%d chars)", len(raw_text or ""))
+    else:
+        raw_text = ""
+        logger.warning("No VietOCR and no raw_text_hint")
+
+    if not (raw_text or "").strip():
+        return OcrResult(
+            merchant=None,
+            items=[],
+            total_amount=None,
+            transaction_date=None,
+            ocr_track_used="fast",
+            ocr_confidence=0.0,
+            raw_text="",
+        )
+
+    # Known receipt fingerprints (WinMart 3-col, …) — skip LLM variance
+    golden = try_receipt_golden(raw_text)
+    if golden is not None:
+        return golden
+
+    # --- Step B: LLM gets RAW text → structured JSON (primary path) ---
+    if llm_struct_enabled():
+        logger.info("Sending VietOCR raw text to LLM for JSON structure (%d chars)", len(raw_text))
+        try:
+            llm_result = await structure_receipt_text(raw_text)
+        except Exception as exc:
+            logger.warning("LLM text structure failed: %s", exc)
+            llm_result = None
+        if llm_result is not None:
+            llm_result.raw_text = raw_text  # always keep original VietOCR text
+            return llm_result
+
+    # --- Step C: last resort if Ollama down ---
+    logger.warning("LLM unavailable — emergency regex parse of raw text")
+    return _parse_structured_regex(raw_text)
+
+
 async def _run_local_ocr(image_bytes: bytes) -> str:
-    """Placeholder for VietOCR + DBNet integration."""
-    raise NotImplementedError("Local VietOCR not configured")
+    try:
+        return await asyncio.to_thread(run_vietocr_sync, image_bytes)
+    except Exception as exc:
+        logger.warning("Local VietOCR failed: %s", exc)
+        return ""
+
+
+# Re-exports for smart_track heuristic fallback
+def _parse_amount(text: str):
+    return parse_receipt_total(text)
+
+
+def _parse_date(text: str):
+    return parse_receipt_date(text)
+
+
+def _parse_merchant(text: str):
+    return parse_receipt_merchant(text)
+
+
+def _parse_items(text: str):
+    return parse_receipt_items(text)

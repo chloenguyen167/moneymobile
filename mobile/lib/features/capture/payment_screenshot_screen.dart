@@ -7,6 +7,8 @@ import 'package:intl/intl.dart';
 
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/format.dart';
+import '../../core/utils/image_compress.dart';
 import '../../data/models/models.dart';
 
 class PaymentScreenshotScreen extends ConsumerStatefulWidget {
@@ -35,10 +37,13 @@ class _PaymentScreenshotScreenState
     if (file == null) return;
 
     final bytes = await file.readAsBytes();
+    final compressed = compressImageBytes(Uint8List.fromList(bytes), quality: 70);
     setState(() {
-      _imageBytes = bytes;
-      _filename = file.name;
-      _quality = evaluateImageQuality(bytes, blurThreshold: 60);
+      _imageBytes = compressed;
+      _filename = file.name.endsWith('.jpg') || file.name.endsWith('.jpeg')
+          ? file.name
+          : '${file.name.split('.').first}.jpg';
+      _quality = evaluateImageQuality(compressed, blurThreshold: 20);
       _result = null;
       _error = null;
     });
@@ -145,15 +150,15 @@ class _PaymentScreenshotScreenState
                           : 'Không rõ',
                     ),
                     _FieldRow(
-                      label: 'Merchant / người nhận',
+                      label: 'Người nhận',
                       value: extraction.merchant ?? 'Không rõ',
                     ),
                     _FieldRow(
-                      label: 'Nguồn app',
+                      label: 'Ứng dụng',
                       value: extraction.paymentSource ?? 'Không rõ',
                     ),
                     _FieldRow(
-                      label: 'Ngày giao dịch',
+                      label: 'Ngày',
                       value: extraction.transactionDate != null
                           ? DateFormat(
                               'dd/MM/yyyy',
@@ -162,21 +167,11 @@ class _PaymentScreenshotScreenState
                     ),
                     _FieldRow(
                       label: 'Nội dung',
-                      value: extraction.description ?? 'Không rõ',
+                      value: extraction.description ?? '—',
                     ),
                     _FieldRow(
                       label: 'Mã giao dịch',
-                      value: extraction.referenceCode ?? 'Không rõ',
-                    ),
-                    _FieldRow(
-                      label: 'OCR track',
-                      value: extraction.ocrTrackUsed ?? 'Không rõ',
-                    ),
-                    _FieldRow(
-                      label: 'OCR confidence',
-                      value: extraction.ocrConfidence != null
-                          ? extraction.ocrConfidence!.toStringAsFixed(2)
-                          : 'Không rõ',
+                      value: extraction.referenceCode ?? '—',
                       isLast: true,
                     ),
                   ],
@@ -229,7 +224,7 @@ class _PaymentHero extends StatelessWidget {
               borderRadius: BorderRadius.circular(999),
             ),
             child: const Text(
-              'Payment Screenshot OCR',
+              'Ảnh thanh toán',
               style: TextStyle(
                 color: AppColors.onPrimary,
                 fontWeight: FontWeight.w800,
@@ -239,7 +234,7 @@ class _PaymentHero extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            'Đọc nhanh một giao dịch từ ảnh chụp màn hình',
+            'Chọn ảnh chuyển khoản hoặc ví điện tử',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w800,
               color: AppColors.onPrimary,
@@ -247,7 +242,7 @@ class _PaymentHero extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Phù hợp với ảnh thanh toán từ app ngân hàng hoặc ví điện tử. Luồng này ưu tiên số tiền, người nhận, nội dung và mã giao dịch.',
+            'App sẽ đọc số tiền, người nhận và lưu thành một giao dịch.',
             style: TextStyle(
               color: Color(0xFF4E3D00),
               fontSize: 14,
@@ -515,7 +510,7 @@ class _EmptyPreview extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Chọn ảnh từ thư viện để bắt đầu OCR giao dịch.',
+            'Chọn ảnh từ thư viện để bắt đầu.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.onSurfaceMuted, height: 1.4),
           ),
@@ -569,13 +564,8 @@ class _QualityBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  quality.message,
+                  isLow ? 'Ảnh hơi mờ — vẫn có thể đọc' : 'Ảnh đủ rõ',
                   style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Blur score: ${quality.blurScore.toStringAsFixed(1)}',
-                  style: const TextStyle(color: AppColors.onSurfaceMuted),
                 ),
               ],
             ),
@@ -702,33 +692,22 @@ class _PaymentClassificationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      title: 'Phân loại giao dịch',
-      icon: Icons.category_outlined,
+      title: transactionId != null ? 'Đã lưu giao dịch' : 'Kết quả',
+      icon: transactionId != null
+          ? Icons.check_circle_outline_rounded
+          : Icons.category_outlined,
       accent: AppColors.secondary,
       child: Column(
         children: [
           _FieldRow(
-            label: 'Nhóm',
-            value: classification['category_name']?.toString() ?? 'Khác',
+            label: 'Danh mục',
+            value: classification['category_name']?.toString() ?? 'Chưa phân loại',
           ),
           _FieldRow(
-            label: 'Confidence',
-            value: classification['confidence']?.toString() ?? '0',
-          ),
-          _FieldRow(
-            label: 'Track',
-            value: classification['track_used']?.toString() ?? 'Không rõ',
-          ),
-          _FieldRow(
-            label: 'Lý do',
-            value:
-                classification['reason']?.toString() ?? 'Không có giải thích',
-          ),
-          _FieldRow(
-            label: 'Đã lưu',
+            label: 'Trạng thái',
             value: transactionId != null
-                ? 'Có, transaction_id = $transactionId'
-                : 'Chưa lưu',
+                ? 'Đã thêm vào danh sách chi tiêu'
+                : 'Chưa lưu — kiểm tra lại số tiền',
             isLast: true,
           ),
         ],

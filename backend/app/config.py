@@ -13,6 +13,27 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     gemini_api_key: str = ""
 
+    # Local Ollama — Qwen3 text LLM for classify (OCR uses VietOCR, not Qwen-VL)
+    ollama_enabled: bool = True
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_vl_model: str = "qwen3-vl:4b"  # unused for OCR; kept for optional experiments
+    ollama_llm_model: str = "qwen3:8b"
+    ollama_llm_timeout_seconds: int = 120
+    ollama_vl_timeout_seconds: int = 600
+    ollama_vl_max_edge_px: int = 1280
+    ollama_timeout_seconds: int = 180
+
+    # Local VietOCR (https://github.com/pbcquoc/vietocr)
+    vietocr_enabled: bool = True
+    vietocr_model: str = "vgg_seq2seq"  # or vgg_transformer
+    vietocr_device: str = ""  # auto: mps / cuda / cpu
+    vietocr_max_image_width: int = 1600
+
+    # After VietOCR: Ollama text LLM (qwen3) structures merchant/items/total — no Qwen-VL
+    ocr_llm_struct_enabled: bool = True
+    ocr_llm_vision_fallback: bool = False  # Qwen-VL disabled; VietOCR + text LLM only
+
+
     upload_dir: str = "uploads"
     ocr_fast_confidence_threshold: float = 0.85
     ocr_smart_confidence_threshold: float = 0.6

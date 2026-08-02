@@ -1,0 +1,4 @@
+storePassword=your-store-password
+keyPassword=your-key-password
+keyAlias=tuchi
+storeFile=upload-keystore.jks

@@ -13,55 +13,60 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isCaptureTab = shell.currentIndex == 1;
+
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 92,
-        automaticallyImplyLeading: false,
-        flexibleSpace: const _HeaderBackground(),
-        titleSpacing: 16,
-        title: const _HomeBrand(),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _TopActionButton(
-                  icon: Icons.add_rounded,
-                  tooltip: 'Thêm nhanh',
-                  onPressed: () => context.push('/quick-add'),
-                ),
-                const SizedBox(width: 6),
-                _TopActionButton(
-                  icon: Icons.notifications_none_rounded,
-                  tooltip: 'Theo dõi giao dịch',
-                  onPressed: () => context.push('/settings/notifications'),
-                ),
-                const SizedBox(width: 6),
-                _TopMenuButton(
-                  onSelected: (value) async {
-                    switch (value) {
-                      case _HomeMenuAction.subscriptions:
-                        context.push('/subscriptions');
-                        break;
-                      case _HomeMenuAction.email:
-                        context.push('/settings/email');
-                        break;
-                      case _HomeMenuAction.logout:
-                        await ref.read(notificationCaptureProvider).stop();
-                        ref.read(alertPollerProvider).stop();
-                        await ref.read(repositoryProvider).logout();
-                        ref.invalidate(authTokenProvider);
-                        if (context.mounted) context.go('/login');
-                        break;
-                    }
-                  },
+      backgroundColor: isCaptureTab ? Colors.black : null,
+      appBar: isCaptureTab
+          ? null
+          : AppBar(
+              toolbarHeight: 92,
+              automaticallyImplyLeading: false,
+              flexibleSpace: const _HeaderBackground(),
+              titleSpacing: 16,
+              title: const _HomeBrand(),
+              actions: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _TopActionButton(
+                        icon: Icons.notifications_none_rounded,
+                        tooltip: 'Theo dõi giao dịch',
+                        onPressed: () =>
+                            context.push('/settings/notifications'),
+                      ),
+                      const SizedBox(width: 6),
+                      _TopMenuButton(
+                        onSelected: (value) async {
+                          switch (value) {
+                            case _HomeMenuAction.subscriptions:
+                              context.push('/subscriptions');
+                              break;
+                            case _HomeMenuAction.quickAdd:
+                              context.push('/quick-add');
+                              break;
+                            case _HomeMenuAction.email:
+                              context.push('/settings/email');
+                              break;
+                            case _HomeMenuAction.logout:
+                              await ref
+                                  .read(notificationCaptureProvider)
+                                  .stop();
+                              ref.read(alertPollerProvider).stop();
+                              await ref.read(repositoryProvider).logout();
+                              ref.invalidate(authTokenProvider);
+                              if (context.mounted) context.go('/login');
+                              break;
+                          }
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-          ),
-        ],
-      ),
       body: shell,
       bottomNavigationBar: DecoratedBox(
         decoration: const BoxDecoration(
@@ -85,7 +90,7 @@ class HomeScreen extends ConsumerWidget {
             NavigationDestination(
               icon: Icon(Icons.camera_alt_outlined),
               selectedIcon: Icon(Icons.camera_alt_rounded),
-              label: 'Nhập ảnh',
+              label: 'Quét ảnh',
             ),
             NavigationDestination(
               icon: Icon(Icons.account_balance_wallet_outlined),
@@ -104,7 +109,7 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-enum _HomeMenuAction { subscriptions, email, logout }
+enum _HomeMenuAction { subscriptions, quickAdd, email, logout }
 
 class _HeaderBackground extends StatelessWidget {
   const _HeaderBackground();
@@ -287,14 +292,21 @@ class _TopMenuButton extends StatelessWidget {
           value: _HomeMenuAction.subscriptions,
           child: _MenuItemRow(
             icon: Icons.auto_awesome_motion_rounded,
-            label: 'Giao dịch định kỳ',
+            label: 'Chi tiêu định kỳ',
+          ),
+        ),
+        PopupMenuItem(
+          value: _HomeMenuAction.quickAdd,
+          child: _MenuItemRow(
+            icon: Icons.content_paste_rounded,
+            label: 'Dán thông báo',
           ),
         ),
         PopupMenuItem(
           value: _HomeMenuAction.email,
           child: _MenuItemRow(
             icon: Icons.mail_outline_rounded,
-            label: 'Email (iOS)',
+            label: 'Đồng bộ email',
           ),
         ),
         PopupMenuDivider(),

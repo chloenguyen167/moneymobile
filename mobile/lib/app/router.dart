@@ -7,14 +7,13 @@ import '../features/analytics/analytics_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/budget/budget_screen.dart';
 import '../features/capture/capture_screen.dart';
-import '../features/capture/payment_screenshot_screen.dart';
-import '../features/capture/receipt_capture_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/email/email_settings_screen.dart';
 import '../features/notification_listener/notification_settings_screen.dart';
 import '../features/quick_add/quick_add_screen.dart';
 import '../features/subscriptions/subscriptions_screen.dart';
 import '../features/transactions/transaction_detail_screen.dart';
+import '../features/transactions/transaction_form_screen.dart';
 import '../features/transactions/transactions_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -46,18 +45,29 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => const SubscriptionsScreen(),
       ),
       GoRoute(
-        path: '/capture/receipt',
-        builder: (_, _) => const ReceiptCaptureScreen(),
+        path: '/transactions/new',
+        builder: (_, _) => const TransactionFormScreen(),
       ),
       GoRoute(
-        path: '/capture/payment',
-        builder: (_, _) => const PaymentScreenshotScreen(),
+        path: '/transactions/:id/edit',
+        builder: (_, state) {
+          final id = int.parse(state.pathParameters['id']!);
+          final tx = state.extra is TransactionModel
+              ? state.extra as TransactionModel
+              : null;
+          return TransactionFormScreen(transactionId: id, transaction: tx);
+        },
       ),
       GoRoute(
         path: '/transactions/:id',
-        builder: (_, state) => TransactionDetailScreen(
-          transaction: state.extra! as TransactionModel,
-        ),
+        builder: (_, state) {
+          final id = int.parse(state.pathParameters['id']!);
+          final extra = state.extra;
+          return TransactionDetailScreen(
+            transactionId: id,
+            initial: extra is TransactionModel ? extra : null,
+          );
+        },
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
