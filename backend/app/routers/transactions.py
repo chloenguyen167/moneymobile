@@ -9,6 +9,8 @@ from app.db.session import get_db
 from app.deps import get_current_user
 from app.models import Transaction, User
 from app.schemas import (
+    ClassifyReceiptRequest,
+    ClassifyReceiptResponse,
     ClassificationResult,
     OcrResult,
     ProcessPaymentScreenshotResponse,
@@ -42,11 +44,16 @@ async def process_receipt_endpoint(
     is_low_quality: bool = Form(False),
     raw_text_hint: str | None = Form(None),
     auto_save: bool = Form(False),
+    include_classification: bool = Form(True),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     image_bytes = await file.read()
     ocr: OcrResult = await process_receipt(db, user.id, image_bytes, is_low_quality, raw_text_hint)
+
+    if not include_classification:
+        return ProcessReceiptResponse(ocr=ocr, classification=None, transaction_id=None)
+
     classification: ClassificationResult = await classify_transaction(db, user.id, ocr)
 
     tx_id = None
@@ -55,6 +62,22 @@ async def process_receipt_endpoint(
         tx_id = tx.id
 
     return ProcessReceiptResponse(ocr=ocr, classification=classification, transaction_id=tx_id)
+
+
+@router.post("/classify-receipt", response_model=ClassifyReceiptResponse)
+async def classify_receipt_endpoint(
+    body: ClassifyReceiptRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    classification = await classify_transaction(db, user.id, body.ocr)
+
+    tx_id = None
+    if body.auto_save and body.ocr.total_amount:
+        tx = await create_transaction_from_ocr(db, user.id, body.ocr, classification)
+        tx_id = tx.id
+
+    return ClassifyReceiptResponse(classification=classification, transaction_id=tx_id)
 
 
 @router.post("/process-payment-screenshot", response_model=ProcessPaymentScreenshotResponse)
@@ -156,8 +179,13 @@ async def update_transaction(
 
     if body.merchant_name is not None:
         tx.merchant_name = body.merchant_name
+    if body.description is not None:
+        tx.description = body.description
     if body.amount is not None:
         tx.amount = body.amount
+    if body.transaction_time is not None:
+        tx.transaction_time = body.transaction_time
+        tx.transaction_date = body.transaction_time.date()
 
     return await to_transaction_out(db, tx)
 

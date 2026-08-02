@@ -13,6 +13,7 @@ class TransactionDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
+    final displayTime = transaction.transactionTime ?? transaction.createdAt;
     final items = _visibleItems(transaction.items ?? const []);
     final breakdown = _buildBreakdown(items);
     final hasReceiptItems = items.isNotEmpty;
@@ -33,7 +34,7 @@ class TransactionDetailScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    transaction.merchantName ?? 'Không rõ merchant',
+                    transaction.displayTitle,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -48,9 +49,18 @@ class TransactionDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${dateFmt.format(transaction.createdAt)} · ${transaction.source}',
+                    '${dateFmt.format(displayTime)} · ${transaction.source}',
                     style: const TextStyle(color: AppColors.onSurfaceMuted),
                   ),
+                  if (transaction.merchantName != null &&
+                      transaction.merchantName!.trim().isNotEmpty &&
+                      transaction.merchantName != transaction.description) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Merchant: ${transaction.merchantName}',
+                      style: const TextStyle(color: AppColors.onSurfaceMuted),
+                    ),
+                  ],
                 ],
               ),
             ),

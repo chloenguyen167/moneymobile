@@ -48,17 +48,37 @@ class TuchiRepository {
     List<int> bytes, {
     required String filename,
     bool isLowQuality = false,
+    bool includeClassification = true,
+    bool autoSave = true,
   }) async {
     final resp = await _api.multipart(
       '/transactions/process-receipt',
       fileBytes: bytes,
       filename: filename,
-      fields: {'is_low_quality': isLowQuality.toString(), 'auto_save': 'true'},
+      fields: {
+        'is_low_quality': isLowQuality.toString(),
+        'auto_save': autoSave.toString(),
+        'include_classification': includeClassification.toString(),
+      },
     );
     final body = await resp.stream.bytesToString();
     if (resp.statusCode >= 400) throw Exception(body);
     return ProcessReceiptResult.fromJson(
       jsonDecode(body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<ClassifyReceiptResult> classifyReceipt(
+    Map<String, dynamic> ocr, {
+    bool autoSave = true,
+  }) async {
+    final resp = await _api.post(
+      '/transactions/classify-receipt',
+      body: {'ocr': ocr, 'auto_save': autoSave},
+    );
+    if (resp.statusCode >= 400) throw Exception(_error(resp));
+    return ClassifyReceiptResult.fromJson(
+      jsonDecode(resp.body) as Map<String, dynamic>,
     );
   }
 
@@ -95,12 +115,18 @@ class TuchiRepository {
   Future<TransactionModel> createTransaction({
     required double amount,
     String? merchantName,
+    String? description,
     int? categoryId,
+    DateTime? transactionTime,
     String source = 'manual',
   }) async {
     final body = <String, dynamic>{'amount': amount, 'source': source};
     if (merchantName != null) body['merchant_name'] = merchantName;
+    if (description != null) body['description'] = description;
     if (categoryId != null) body['category_id'] = categoryId;
+    if (transactionTime != null) {
+      body['transaction_time'] = transactionTime.toIso8601String();
+    }
 
     final resp = await _api.post('/transactions', body: body);
     if (resp.statusCode >= 400) throw Exception(_error(resp));

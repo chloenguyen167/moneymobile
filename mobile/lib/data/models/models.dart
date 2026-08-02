@@ -27,16 +27,19 @@ class TransactionModel {
     required this.transactionDate,
     required this.createdAt,
     this.merchantName,
+    this.description,
     this.categoryId,
     this.categoryName,
     this.confidence,
     this.ocrTrackUsed,
     this.classificationReason,
+    this.transactionTime,
     this.items,
   });
 
   final int id;
   final String? merchantName;
+  final String? description;
   final double amount;
   final List<dynamic>? items;
   final int? categoryId;
@@ -45,13 +48,25 @@ class TransactionModel {
   final double? confidence;
   final String? ocrTrackUsed;
   final DateTime transactionDate;
+  final DateTime? transactionTime;
   final DateTime createdAt;
   final String? classificationReason;
+
+  String get displayTitle {
+    if (description != null && description!.trim().isNotEmpty) {
+      return description!;
+    }
+    if (merchantName != null && merchantName!.trim().isNotEmpty) {
+      return merchantName!;
+    }
+    return 'Giao dịch chưa có mô tả';
+  }
 
   factory TransactionModel.fromJson(Map<String, dynamic> json) =>
       TransactionModel(
         id: json['id'] as int,
         merchantName: json['merchant_name'] as String?,
+        description: json['description'] as String?,
         amount: (json['amount'] as num).toDouble(),
         items: json['items'] as List<dynamic>?,
         categoryId: json['category_id'] as int?,
@@ -60,6 +75,9 @@ class TransactionModel {
         confidence: (json['confidence'] as num?)?.toDouble(),
         ocrTrackUsed: json['ocr_track_used'] as String?,
         transactionDate: DateTime.parse(json['transaction_date'] as String),
+        transactionTime: json['transaction_time'] != null
+            ? DateTime.parse(json['transaction_time'] as String)
+            : null,
         createdAt: DateTime.parse(json['created_at'] as String),
         classificationReason: json['classification_reason'] as String?,
       );
@@ -175,17 +193,30 @@ class EmailStatusModel {
 class ProcessReceiptResult {
   ProcessReceiptResult({
     required this.ocr,
-    required this.classification,
+    this.classification,
     this.transactionId,
   });
 
   final Map<String, dynamic> ocr;
-  final Map<String, dynamic> classification;
+  final Map<String, dynamic>? classification;
   final int? transactionId;
 
   factory ProcessReceiptResult.fromJson(Map<String, dynamic> json) =>
       ProcessReceiptResult(
         ocr: json['ocr'] as Map<String, dynamic>,
+        classification: json['classification'] as Map<String, dynamic>?,
+        transactionId: json['transaction_id'] as int?,
+      );
+}
+
+class ClassifyReceiptResult {
+  ClassifyReceiptResult({required this.classification, this.transactionId});
+
+  final Map<String, dynamic> classification;
+  final int? transactionId;
+
+  factory ClassifyReceiptResult.fromJson(Map<String, dynamic> json) =>
+      ClassifyReceiptResult(
         classification: json['classification'] as Map<String, dynamic>,
         transactionId: json['transaction_id'] as int?,
       );

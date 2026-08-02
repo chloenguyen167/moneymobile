@@ -34,6 +34,7 @@ async def upsert_cashflow_profile(
         )
         db.add(profile)
     await db.flush()
+    await db.refresh(profile)
     return profile
 
 

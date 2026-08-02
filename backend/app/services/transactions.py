@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,16 +16,21 @@ from app.services.ocr.reference_correction import normalize_vietnamese
 
 
 async def save_transaction(db: AsyncSession, user_id: int, body: TransactionCreate) -> Transaction:
+    tx_date = body.transaction_date or (
+        body.transaction_time.date() if body.transaction_time else date.today()
+    )
     tx = Transaction(
         user_id=user_id,
         merchant_name=body.merchant_name,
+        description=body.description,
         amount=body.amount,
         items=[i.model_dump() for i in body.items] if body.items else None,
         category_id=body.category_id,
         source=TransactionSource(body.source),
         confidence=body.confidence,
         ocr_track_used=body.ocr_track_used,
-        transaction_date=body.transaction_date or date.today(),
+        transaction_date=tx_date,
+        transaction_time=body.transaction_time,
         classification_reason=body.classification_reason,
     )
     db.add(tx)
@@ -56,6 +61,7 @@ async def to_transaction_out(db: AsyncSession, tx: Transaction) -> TransactionOu
     return TransactionOut(
         id=tx.id,
         merchant_name=tx.merchant_name,
+        description=tx.description,
         amount=tx.amount,
         items=tx.items,
         category_id=tx.category_id,
@@ -64,6 +70,7 @@ async def to_transaction_out(db: AsyncSession, tx: Transaction) -> TransactionOu
         confidence=tx.confidence,
         ocr_track_used=tx.ocr_track_used,
         transaction_date=tx.transaction_date,
+        transaction_time=tx.transaction_time,
         created_at=tx.created_at,
         classification_reason=tx.classification_reason,
     )
@@ -72,6 +79,7 @@ async def to_transaction_out(db: AsyncSession, tx: Transaction) -> TransactionOu
 async def create_transaction_from_ocr(
     db: AsyncSession, user_id: int, ocr: OcrResult, classification: ClassificationResult
 ) -> Transaction:
+    captured_at = datetime.now(timezone.utc)
     body = TransactionCreate(
         merchant_name=ocr.merchant,
         amount=ocr.total_amount or 0,
@@ -79,6 +87,7 @@ async def create_transaction_from_ocr(
         category_id=classification.category_id,
         source="ocr",
         transaction_date=ocr.transaction_date,
+        transaction_time=captured_at,
         ocr_track_used=ocr.ocr_track_used,
         confidence=classification.confidence,
         classification_reason=classification.reason,
@@ -92,6 +101,7 @@ async def create_transaction_from_payment_screenshot(
     extract: PaymentScreenshotExtract,
     classification: ClassificationResult,
 ) -> Transaction:
+    captured_at = datetime.now(timezone.utc)
     reason_parts = [classification.reason] if classification.reason else []
     if extract.payment_source:
         reason_parts.append(f"Nguồn ảnh: {extract.payment_source}")
@@ -102,11 +112,13 @@ async def create_transaction_from_payment_screenshot(
 
     body = TransactionCreate(
         merchant_name=extract.merchant or extract.payment_source,
+        description=extract.description,
         amount=extract.total_amount or 0,
         items=None,
         category_id=classification.category_id,
         source="ocr",
         transaction_date=extract.transaction_date,
+        transaction_time=captured_at,
         ocr_track_used=extract.ocr_track_used,
         confidence=classification.confidence,
         classification_reason=" | ".join(reason_parts) if reason_parts else None,

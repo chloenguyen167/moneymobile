@@ -80,6 +80,7 @@ class Transaction(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     merchant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("merchants.id"))
     merchant_name: Mapped[Optional[str]] = mapped_column(String(255))
+    description: Mapped[Optional[str]] = mapped_column(Text)
     amount: Mapped[float] = mapped_column(Float)
     items: Mapped[Optional[dict]] = mapped_column(JSONB)
     category_id: Mapped[Optional[int]] = mapped_column(ForeignKey("categories.id"))
@@ -87,6 +88,7 @@ class Transaction(Base):
     confidence: Mapped[Optional[float]] = mapped_column(Float)
     ocr_track_used: Mapped[Optional[str]] = mapped_column(String(20))
     transaction_date: Mapped[date] = mapped_column(Date)
+    transaction_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     classification_reason: Mapped[Optional[str]] = mapped_column(Text)
 

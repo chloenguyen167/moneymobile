@@ -24,11 +24,18 @@ class TransactionsScreen extends ConsumerWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.receipt, size: 64, color: AppColors.onSurfaceMuted.withValues(alpha: 0.5)),
+                Icon(
+                  Icons.receipt,
+                  size: 64,
+                  color: AppColors.onSurfaceMuted.withValues(alpha: 0.5),
+                ),
                 const SizedBox(height: 16),
                 const Text('Chưa có giao dịch'),
                 const SizedBox(height: 8),
-                const Text('Chụp hóa đơn hoặc thêm thủ công', style: TextStyle(color: AppColors.onSurfaceMuted)),
+                const Text(
+                  'Chụp hóa đơn hoặc thêm thủ công',
+                  style: TextStyle(color: AppColors.onSurfaceMuted),
+                ),
               ],
             ),
           );
@@ -48,7 +55,9 @@ class TransactionsScreen extends ConsumerWidget {
                 transaction: tx,
                 categories: asyncCats.valueOrNull ?? [],
                 onConfirm: (catId) async {
-                  await ref.read(repositoryProvider).confirmCategory(tx.id, catId);
+                  await ref
+                      .read(repositoryProvider)
+                      .confirmCategory(tx.id, catId);
                   ref.invalidate(transactionsProvider);
                 },
               );
@@ -73,6 +82,7 @@ class _TransactionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final displayTime = transaction.transactionTime ?? transaction.createdAt;
     final uploadedAtFmt = DateFormat('dd/MM/yyyy HH:mm');
     final needsConfirm = transaction.categoryName == null;
 
@@ -80,7 +90,8 @@ class _TransactionCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => context.push('/transactions/${transaction.id}', extra: transaction),
+        onTap: () =>
+            context.push('/transactions/${transaction.id}', extra: transaction),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -90,8 +101,11 @@ class _TransactionCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      transaction.merchantName ?? 'Không rõ merchant',
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                      transaction.displayTitle,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                   Text(
@@ -105,8 +119,11 @@ class _TransactionCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Gửi lúc ${uploadedAtFmt.format(transaction.createdAt)} · ${transaction.source}',
-                style: const TextStyle(color: AppColors.onSurfaceMuted, fontSize: 13),
+                'Giao dịch lúc ${uploadedAtFmt.format(displayTime)} · ${transaction.source}',
+                style: const TextStyle(
+                  color: AppColors.onSurfaceMuted,
+                  fontSize: 13,
+                ),
               ),
               if (transaction.categoryName != null) ...[
                 const SizedBox(height: 8),
@@ -119,17 +136,29 @@ class _TransactionCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   transaction.classificationReason!,
-                  style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceMuted, fontStyle: FontStyle.italic),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.onSurfaceMuted,
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
               ],
               const SizedBox(height: 8),
               Text(
                 'Chạm để xem chi tiết OCR',
-                style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceMuted),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.onSurfaceMuted,
+                ),
               ),
               if (needsConfirm && categories.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                Text('Chọn category để xác nhận:', style: Theme.of(context).textTheme.labelMedium),
+                Text(
+                  'Chọn category để xác nhận:',
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../notification_listener/notification_service.dart';
+import 'app_bottom_nav.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key, required this.shell});
@@ -63,42 +64,21 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       body: shell,
-      bottomNavigationBar: DecoratedBox(
-        decoration: const BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Color(0x14000000),
-              blurRadius: 20,
-              offset: Offset(0, -4),
-            ),
-          ],
-        ),
-        child: NavigationBar(
-          selectedIndex: shell.currentIndex,
-          onDestinationSelected: shell.goBranch,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.receipt_long_outlined),
-              selectedIcon: Icon(Icons.receipt_long_rounded),
-              label: 'Giao dịch',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.camera_alt_outlined),
-              selectedIcon: Icon(Icons.camera_alt_rounded),
-              label: 'Nhập ảnh',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.account_balance_wallet_outlined),
-              selectedIcon: Icon(Icons.account_balance_wallet_rounded),
-              label: 'Ngân sách',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.insights_outlined),
-              selectedIcon: Icon(Icons.insights_rounded),
-              label: 'Phân tích',
-            ),
-          ],
-        ),
+      bottomNavigationBar: AppBottomNav(
+        selectedIndex: shell.currentIndex,
+        onSelected: (index) {
+          if (index == 0) {
+            ref.invalidate(transactionsProvider);
+          } else if (index == 2) {
+            ref.invalidate(budgetsProvider);
+          } else if (index == 3) {
+            ref.invalidate(analyticsProvider);
+            ref.invalidate(cashflowProfileProvider);
+            ref.invalidate(cashflowInsightsProvider);
+            ref.invalidate(subscriptionsProvider);
+          }
+          shell.goBranch(index);
+        },
       ),
     );
   }

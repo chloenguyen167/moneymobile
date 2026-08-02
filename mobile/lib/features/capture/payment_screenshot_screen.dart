@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/models.dart';
+import '../home/app_bottom_nav.dart';
 
 class PaymentScreenshotScreen extends ConsumerStatefulWidget {
   const PaymentScreenshotScreen({super.key});
@@ -57,6 +58,10 @@ class _PaymentScreenshotScreenState
           .read(repositoryProvider)
           .processPaymentScreenshot(_imageBytes!, filename: _filename!);
       ref.invalidate(transactionsProvider);
+      ref.invalidate(budgetsProvider);
+      ref.invalidate(analyticsProvider);
+      ref.invalidate(cashflowInsightsProvider);
+      ref.invalidate(subscriptionsProvider);
       setState(() => _result = result);
     } catch (e) {
       setState(() => _error = e.toString());
@@ -71,6 +76,7 @@ class _PaymentScreenshotScreenState
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ảnh giao dịch')),
+      bottomNavigationBar: const AppBottomNav(selectedIndex: 1),
       body: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -82,10 +88,6 @@ class _PaymentScreenshotScreenState
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
           children: [
-            const _PaymentHero(),
-            const SizedBox(height: 18),
-            const _PaymentFlowCard(),
-            const SizedBox(height: 18),
             _UploadPanel(
               imageBytes: _imageBytes,
               filename: _filename,
@@ -193,175 +195,6 @@ class _PaymentScreenshotScreenState
           ],
         ),
       ),
-    );
-  }
-}
-
-class _PaymentHero extends StatelessWidget {
-  const _PaymentHero();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFFD84C), AppColors.primary],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.22),
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.34),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: const Text(
-              'Payment Screenshot OCR',
-              style: TextStyle(
-                color: AppColors.onPrimary,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'Đọc nhanh một giao dịch từ ảnh chụp màn hình',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: AppColors.onPrimary,
-            ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Phù hợp với ảnh thanh toán từ app ngân hàng hoặc ví điện tử. Luồng này ưu tiên số tiền, người nhận, nội dung và mã giao dịch.',
-            style: TextStyle(
-              color: Color(0xFF4E3D00),
-              fontSize: 14,
-              height: 1.45,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaymentFlowCard extends StatelessWidget {
-  const _PaymentFlowCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.shield_outlined, color: AppColors.secondary, size: 18),
-              SizedBox(width: 8),
-              Text(
-                'Flow khuyến nghị',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-              ),
-            ],
-          ),
-          SizedBox(height: 14),
-          _StepRow(
-            step: '1',
-            title: 'Chụp màn hình thanh toán',
-            subtitle:
-                'Chụp ngay trong app ngân hàng hoặc ví sau khi giao dịch thành công.',
-          ),
-          SizedBox(height: 12),
-          _StepRow(
-            step: '2',
-            title: 'Chọn ảnh từ thư viện',
-            subtitle:
-                'Ưu tiên album Screenshots để tìm nhanh và giữ ảnh rõ nét.',
-          ),
-          SizedBox(height: 12),
-          _StepRow(
-            step: '3',
-            title: 'Kiểm tra kết quả',
-            subtitle:
-                'App sẽ trích xuất và phân loại giao dịch thay vì liệt kê sản phẩm như hóa đơn.',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StepRow extends StatelessWidget {
-  const _StepRow({
-    required this.step,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String step;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            color: AppColors.secondary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            step,
-            style: const TextStyle(
-              color: AppColors.secondary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  color: AppColors.onSurfaceMuted,
-                  height: 1.4,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

@@ -85,11 +85,13 @@ class CategoryBreakdown(BaseModel):
 
 class TransactionCreate(BaseModel):
     merchant_name: Optional[str] = None
+    description: Optional[str] = None
     amount: float
     items: Optional[list[ReceiptItem]] = None
     category_id: Optional[int] = None
     source: str = "manual"
     transaction_date: Optional[date] = None
+    transaction_time: Optional[datetime] = None
     ocr_track_used: Optional[str] = None
     confidence: Optional[float] = None
     classification_reason: Optional[str] = None
@@ -98,12 +100,15 @@ class TransactionCreate(BaseModel):
 class TransactionUpdate(BaseModel):
     category_id: Optional[int] = None
     merchant_name: Optional[str] = None
+    description: Optional[str] = None
     amount: Optional[float] = None
+    transaction_time: Optional[datetime] = None
 
 
 class TransactionOut(BaseModel):
     id: int
     merchant_name: Optional[str]
+    description: Optional[str] = None
     amount: float
     items: Optional[list] = None
     category_id: Optional[int]
@@ -112,6 +117,7 @@ class TransactionOut(BaseModel):
     confidence: Optional[float]
     ocr_track_used: Optional[str]
     transaction_date: date
+    transaction_time: Optional[datetime] = None
     created_at: datetime
     classification_reason: Optional[str]
 
@@ -195,6 +201,16 @@ class AlertOut(BaseModel):
 
 class ProcessReceiptResponse(BaseModel):
     ocr: OcrResult
+    classification: Optional[ClassificationResult] = None
+    transaction_id: Optional[int] = None
+
+
+class ClassifyReceiptRequest(BaseModel):
+    ocr: OcrResult
+    auto_save: bool = True
+
+
+class ClassifyReceiptResponse(BaseModel):
     classification: ClassificationResult
     transaction_id: Optional[int] = None
 

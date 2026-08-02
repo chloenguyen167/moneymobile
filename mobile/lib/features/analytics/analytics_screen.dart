@@ -14,8 +14,6 @@ class AnalyticsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final analyticsAsync = ref.watch(analyticsProvider);
     final cashflowProfileAsync = ref.watch(cashflowProfileProvider);
-    final alertsAsync = ref.watch(alertsProvider);
-    final pipelineAsync = ref.watch(pipelineHealthProvider);
     final subsSummaryAsync = ref.watch(subscriptionsProvider);
 
     return analyticsAsync.when(
@@ -27,8 +25,6 @@ class AnalyticsScreen extends ConsumerWidget {
             ref.invalidate(analyticsProvider);
             ref.invalidate(cashflowProfileProvider);
             ref.invalidate(cashflowInsightsProvider);
-            ref.invalidate(alertsProvider);
-            ref.invalidate(pipelineHealthProvider);
             ref.invalidate(subscriptionsProvider);
             await ref.read(analyticsProvider.future);
           },
@@ -327,118 +323,6 @@ class AnalyticsScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                    ],
-                  );
-                },
-              ),
-              pipelineAsync.when(
-                loading: () => const SizedBox.shrink(),
-                error: (_, _) => const SizedBox.shrink(),
-                data: (health) {
-                  if (health.ocrTotal == 0 && health.classifyTotal == 0) {
-                    return const SizedBox.shrink();
-                  }
-                  final isWarning = health.status == 'warning';
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 24),
-                      Text(
-                        'Pipeline health (${health.periodDays} ngày)',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Card(
-                        color: isWarning
-                            ? AppColors.primary.withValues(alpha: 0.15)
-                            : null,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    isWarning
-                                        ? Icons.warning_amber
-                                        : Icons.check_circle,
-                                    color: isWarning
-                                        ? AppColors.warning
-                                        : AppColors.success,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    isWarning ? 'Cần tối ưu GPU' : 'Ổn định',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'OCR smart track: ${health.ocrSmartTrackPct.toStringAsFixed(1)}% · '
-                                'Classify LLM: ${health.classifySmartTrackPct.toStringAsFixed(1)}% · '
-                                'Mục tiêu ≤ ${health.targetSmartTrackPct.toStringAsFixed(0)}%',
-                                style: const TextStyle(
-                                  color: AppColors.onSurfaceMuted,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              if (health.recommendations.isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                ...health.recommendations.map(
-                                  (r) => Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      '• $r',
-                                      style: const TextStyle(
-                                        color: AppColors.onSurfaceMuted,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              alertsAsync.when(
-                loading: () => const SizedBox.shrink(),
-                error: (_, _) => const SizedBox.shrink(),
-                data: (alerts) {
-                  if (alerts.isEmpty) return const SizedBox.shrink();
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 24),
-                      Text(
-                        'Cảnh báo',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      ...alerts
-                          .take(5)
-                          .map(
-                            (a) => Card(
-                              color: AppColors.primary.withValues(alpha: 0.12),
-                              child: ListTile(
-                                leading: const Icon(
-                                  Icons.notifications_active,
-                                  color: AppColors.warning,
-                                ),
-                                title: Text(a.type),
-                                subtitle: Text(a.payload.toString()),
-                              ),
-                            ),
-                          ),
                     ],
                   );
                 },

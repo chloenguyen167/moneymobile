@@ -27,7 +27,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void initState() {
     super.initState();
     _serverUrl.text = AppConfig.apiBaseUrl;
-    _showServer = AppConfig.needsManualServerUrl;
+    _showServer = false;
   }
 
   @override
@@ -63,10 +63,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
       }
     } catch (e) {
-      setState(() => _error = 'Không kết nối được backend.\n'
-          'URL: ${AppConfig.apiBaseUrl}\n\n'
-          '${AppConfig.ipadHint}\n\n'
-          'Trên Mac chạy: ipconfig getifaddr en0');
+      setState(
+        () => _error =
+            'Không kết nối được backend.\n'
+            'URL: ${AppConfig.apiBaseUrl}\n\n'
+            '${AppConfig.ipadHint}\n\n'
+            'Trên Mac chạy: ipconfig getifaddr en0',
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -83,7 +86,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
       final repo = ref.read(repositoryProvider);
       if (_isRegister) {
-        await repo.register(_email.text.trim(), _password.text, displayName: _name.text.trim());
+        await repo.register(
+          _email.text.trim(),
+          _password.text,
+          displayName: _name.text.trim(),
+        );
       } else {
         await repo.login(_email.text.trim(), _password.text);
       }
@@ -108,33 +115,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(Icons.account_balance_wallet, size: 64, color: AppColors.primary),
+                  Icon(
+                    Icons.account_balance_wallet,
+                    size: 64,
+                    color: AppColors.primary,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Tuchi',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Quản lý chi tiêu thông minh — OCR + AI',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.onSurfaceMuted),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.onSurfaceMuted,
+                    ),
                   ),
                   const SizedBox(height: 32),
-                  if (AppConfig.needsManualServerUrl || _showServer) ...[
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        AppConfig.ipadHint,
-                        style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceMuted),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
+                  if (_showServer) ...[
                     TextField(
                       controller: _serverUrl,
                       keyboardType: TextInputType.url,
@@ -167,13 +170,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       alignment: Alignment.centerRight,
                       child: TextButton(
                         onPressed: () => setState(() => _showServer = true),
-                        child: Text('Server: ${AppConfig.apiBaseUrl}', style: const TextStyle(fontSize: 11)),
+                        child: Text(
+                          'Server: ${AppConfig.apiBaseUrl}',
+                          style: const TextStyle(fontSize: 11),
+                        ),
                       ),
                     ),
                   if (_isRegister)
                     TextField(
                       controller: _name,
-                      decoration: const InputDecoration(labelText: 'Tên hiển thị'),
+                      decoration: const InputDecoration(
+                        labelText: 'Tên hiển thị',
+                      ),
                     ),
                   if (_isRegister) const SizedBox(height: 12),
                   TextField(
@@ -189,7 +197,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
-                    Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    Text(
+                      _error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 24),
                   FilledButton(
@@ -197,13 +210,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: _loading
-                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                           : Text(_isRegister ? 'Đăng ký' : 'Đăng nhập'),
                     ),
                   ),
                   TextButton(
-                    onPressed: _loading ? null : () => setState(() => _isRegister = !_isRegister),
-                    child: Text(_isRegister ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Đăng ký'),
+                    onPressed: _loading
+                        ? null
+                        : () => setState(() => _isRegister = !_isRegister),
+                    child: Text(
+                      _isRegister
+                          ? 'Đã có tài khoản? Đăng nhập'
+                          : 'Chưa có tài khoản? Đăng ký',
+                    ),
                   ),
                 ],
               ),
